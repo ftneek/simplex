@@ -1,0 +1,312 @@
+//Author: @ftneek
+//Last Edit: 2023/12/21
+//TODO: add shortcuts for mx2 and 2xn games
+//TODO: look to optimize pureCheck()
+//TODO: look to optimize dominance()
+//TODO: 2-person non-zero sum games
+
+#cas
+
+// accepts payoff matrix p for a 2-person zero sum game
+// returns [v,x,y]
+// v is value of the game
+// a column of (x/y) is a strategy for (P1/P2)
+// for a given strategy (x_i/y_i) is the probabilitiy (P1/P2) should play (s_i/t_j)
+solveGame(p):=
+BEGIN
+LOCAL (d:=dim(p)),(r:=pureCheck(p));
+// step 1: check for pure strategies
+IF dim(r[2])!=1 THEN
+ RETURN r;
+END;
+
+// no pure strategy
+// step 2: find mixed strategies
+
+// use 2x2 shortcut if possible
+IF d==[2,2] THEN
+ RETURN twobytwo(p);
+END;
+
+// if not, try to reduce to 2x2 using dominant strategies
+p:=dominance(p);
+IF dim(p[1])==[2,2] THEN
+ // use 2x2 if reduced to 2x2
+ d:=twobytwo(p[1]);
+ // insert 0 for deleted rows and columns
+ d[2..3]:=insertZeros(col(d[2],1),col(d[3],1),p[2],p[3]);
+ d[2]:=trn(d[2]);
+ d[3]:=trn(d[3]);
+ RETURN d;
+END;
+
+//TODO: use mx2 method if possible
+//TODO: use 2xn method if possible
+
+// otherwise, solve by simplex
+r:=simplex_game(p[1]);
+
+// insert 0 for deleted rows and columns
+IF len(p[2])>0 OR len(p[3])>0 THEN
+ r[2..3]:=insertZeros(col(r[2],1),col(r[3],1),p[2],p[3]);
+ r[2]:=trn(r[2]);
+ r[3]:=trn(r[3]);
+END;
+
+RETURN r;
+
+END;
+
+// solves 2 person zero sum game by simplex algorithm
+// assumes no pure strategy, no more reduction by dominance
+// returns [v,x,y]
+// v is value of the game
+// (x_i/y_j) the is probabilitiy (P1/P2) should play (s_i/t_j)
+simplex_game(p):=
+BEGIN
+LOCAL (d:=dim(p)),(alpha:=ABS(MIN(MIN(p)))),v,x,y;
+
+//set up dual y' system
+IF alpha THEN p:=p.+alpha END;
+p:=CONCAT(p,IDENMAT(d[1]));
+p:=append(p,[op(CONCAT(MAKELIST(-1,X,1,d[2]),MAKELIST(0,X,1,d[1])))]);
+p:=ADDCOL(p,CONCAT(MAKELIST(1,X,1,d[1]),0),d[2]+d[1]+1);
+
+p:=simplex(p);
+v:=1/-p[1];
+y:=redim(p[0],d[2]);
+x:=p[2][0][d[2]+1..d[2]+d[1]];
+
+y*=v;
+x*=v;
+IF alpha THEN v-=alpha END;
+return [v,trn(x),trn(y)];
+
+END;
+
+// returns [v,x,y] for pure strategies
+// returns [u1,u2] for no pure strategy
+// v is value of the game
+// a column of (x/y) is a pure strategy for (P1/P2)
+// IF dim(x)!=1 THEN PURE STRATEGY
+// ex x:=trn([[1,0,0],
+//            [0,1,0]);
+//    y:=trn([0,0,0,1]);
+// means pure strategies @ (s1,t4) and (s2,t4)
+pureCheck(a)
+BEGIN
+LOCAL (d:=dim(a)),maxMinRow,minMaxCol,(u:=[1,-1]),J,K,(saddle:=[]),(x:=[]),(y:=[]);
+IF d==1 THEN
+ a:=[a];
+ d:=[1,1];
+END;
+maxMinRow:=col(a,0);
+minMaxCol:=a[1];
+FOR I FROM 1 TO d[1] DO
+maxMinRow[I]:=MIN(a[I]);
+END;
+u[1]:=MAX(maxMinRow);
+
+FOR I FROM 1 TO d[2] DO
+minMaxCol[I]:=MAX(col(a,I));
+END;
+u[2]:=MIN(minMaxCol);
+
+IF u[1]==u[2] THEN
+ FOR I FROM POS(maxMinRow,u[1]) TO d[1] DO
+  FOR J FROM POS(minMaxCol,u[2]) TO d[2] DO
+   IF maxMinRow[I]==minMaxCol[J] THEN
+    IF len(saddle)==0 THEN
+     saddle:=[I,J];
+    ELSE
+     IF len(saddle)==2 AND len(saddle[1])==1 THEN
+      saddle:=append([saddle],[I,J]);
+     ELSE
+      saddle:=append(saddle,[I,J]);
+     END;
+    END;
+   END;
+  END;
+ END;
+ IF dim(dim(saddle))!=2 THEN
+  saddle:=[saddle];
+ END;
+ K:=col(saddle,1);
+ FOR I FROM 1 to len(K) DO
+  J:=[op(MAKELIST(0,X,1,d[1]))];
+  J[K[I]]:=1;
+  IF NOT contains(x,J) THEN
+   x:=append(x,J);
+  END;
+ END;
+
+ K:=col(saddle,2);
+ FOR I FROM 1 to len(K) DO
+  J:=[op(MAKELIST(0,X,1,d[2]))];
+  J[K[I]]:=1;
+  IF NOT contains(y,J) THEN
+   y:=append(y,J);
+  END;
+ END;
+
+// [value of the game, Pure strategy @ saddle points]
+ RETURN [u[1],trn(x),trn(y)]
+END;
+
+// No pure strategy
+RETURN [u[1],u[2]];
+END;
+
+twobytwo(m):=
+BEGIN
+LOCAL a,b,c,(d:=dim(m)),r,v,(l:=[]);
+IF d==[2,2] THEN
+ a:=m[1][1];
+ b:=m[1][2];
+ c:=m[2][1];
+ d:=m[2][2];
+ r:=a+d-b-c;
+ v:=(a*d-b*c)/r;
+ l:=[v,trn([(d-c)/r,(a-b)/r]),trn([(d-b)/r,(a-c)/r])];
+END;
+RETURN l;
+END;
+
+//helper for dominance
+checkRow(row1,row2):=
+BEGIN
+LOCAL (n:=len(row1)),I;
+FOR I FROM 1 TO n DO
+ IF row2[I]<row1[I] THEN RETURN 0 END;
+END;
+RETURN 1;
+END;
+
+// uses dominant strategies to reduce a payoff matrix to dim [2,2]
+// returns list of [m', [indices of deleted rows], [indices of deleted columns]]
+dominance(m):=
+BEGIN
+LOCAL (a:=1),(d:=dim(m)),(drow:=[]),(dcol:=[]),I,J;
+
+WHILE m!=a AND d!=[2,2] DO
+ a:=m;
+ FOR I FROM 1 to d[1] DO
+  FOR J FROM 1 to d[1] DO
+   IF I!=J AND checkRow(m[I],m[J])>0 THEN
+    m:=delrow(m,I);
+    IF len(drow)>0 THEN
+     drow:=append(drow,I+len(drow));
+    ELSE
+     drow:=append(drow,I);
+    END;
+    d[1]-=1;
+    I-=1;
+    BREAK;
+    END;
+  END;
+ END;
+
+ FOR I FROM 1 to d[2] DO
+  FOR J FROM 1 to d[2] DO
+   IF I!=J AND checkRow(col(m,J),col(m,I))>0 THEN
+    m:=delcol(m,I);
+    IF len(dcol)>0 THEN
+     dcol:=append(dcol,I+len(dcol));
+    ELSE
+     dcol:=append(dcol,I);
+    END;
+    d[2]-=1;
+    I-=1;
+    BREAK;
+    END;
+  END;
+ END;
+
+END;
+RETURN [m,drow,dcol];
+END;
+
+// inserts zeros into x for deleted rows and into y for deleted columns
+// returns [x',y']
+insertZeros(x,y,drow,dcol):=
+BEGIN
+
+FOR I FROM 1 TO len(drow) DO
+ CASE
+  IF drow[I] < len(x) THEN x:=prepend(x,0) END;
+  IF drow[I] > len(x) THEN x:=append(x,0) END;
+  DEFAULT x:=CONCAT(x[1..drow[I]-1],0,x[drow[I]..len(x)]);
+ END;
+END;
+
+FOR I FROM 1 TO len(dcol) DO
+ CASE
+  IF dcol[I] < len(y) THEN y:=prepend(y,0) END;
+  IF dcol[I] > len(y) THEN y:=append(y,0) END;
+  DEFAULT y:=CONCAT(y[1..dcol[I]-1],0,y[dcol[I]..len(y)]);
+ END;
+END;
+
+RETURN [x,y];
+
+END;
+
+// accepts payoff matrix and probabilities X0,Y0
+// (X0/Y0) may be empty list or matrix of (X/Y)
+// a column of (X/Y) is a potential strategy
+// returns bounds for [v1,v2] for given (X_i/Y_i)
+verifySecurityLevels(m,x,y):=
+BEGIN
+LOCAL d,(d1:=dim(m)),(n:=[]),(v:=[-1,1]);
+
+IF x!=[] THEN
+ d:=dim(x);
+ IF dim(d)!=2 THEN
+  x:=trn(x);
+  d:=[d,1];
+ END;
+ IF d[1]<d1[1] THEN
+  x:=trn(x);
+  d:=[d[2],d[1]];
+ END;
+ FOR I FROM 1 TO d[2] DO
+  n:=append(n,MIN(col(x,I)*m));
+ END;
+ELSE
+v[1]:=0;
+END;
+
+IF v[1] THEN
+ v[1]:=MAX(n);
+ELSE
+ v[1]:=[];
+END;
+
+n:=[];
+IF y!=[] THEN
+ d:=dim(y);
+ IF dim(d)!=2 THEN
+  y:=trn(y);
+  d:=[d,1];
+ END;
+ IF d[1]<d1[2] THEN
+  y:=trn(y);
+  d:=[d[2],d[1]];
+ END;
+ FOR I FROM 1 TO d[2] DO
+  n:=append(n,MAX(m*col(y,I)));
+ END;
+ELSE
+v[2]:=0;
+END;
+
+IF v[2] THEN
+ v[2]:=MIN(n);
+ELSE
+ v[2]:=[];
+END;
+
+RETURN [v[1],v[2]];
+END;
+
+#end

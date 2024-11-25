@@ -1,0 +1,29 @@
+// Author: @ftneek
+// Last edit: 2024/11/17
+#cas
+// Maps a basis to an id
+// basis1 is the basis and n is the total number of variables
+basis_to_id(basis1,n):=
+BEGIN
+local (ID:=0),(l:=len(basis1));
+FOR I from 1 TO l DO
+ ID+= comb(basis1[I]-1,I)
+END;
+return ID;
+END;
+
+// Returns the basis mapped to the provided id, given n variables and b variables in the basis
+id_to_basis(id1, n, b):=
+BEGIN
+local (basis1:=[]),(x:=id1),(start:=-1);
+
+FOR J in range(b,2,-1) DO
+ FOR I in range(1,n+1) DO
+  if comb(I-1,J) <= x THEN start:=I ELSE break END;
+ END;
+ basis1:=append(basis1,start);
+ x-=comb(start-1,J);
+END;
+return reverse(basis1);
+END;
+#end
