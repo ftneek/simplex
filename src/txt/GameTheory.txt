@@ -200,19 +200,15 @@ insertZeros(x,y,drow,dcol):=
 begin
 
 for I from 1 to len(drow) do
- CASE
-  if drow[I] < len(x) then x:=prepend(x,0) end;
-  if drow[I] > len(x) then x:=append(x,0) end;
-  DEFAULT x:=concat(x[1..drow[I]-1],0,x[drow[I]..len(x)]);
- end;
+  if drow[I] < len(x) then x:=prepend(x,0); continue; end;
+  if drow[I] > len(x) then x:=append(x,0); continue; end;
+  x:=concat(x[1..drow[I]-1],0,x[drow[I]..len(x)]);
 end;
 
 for I from 1 to len(dcol) do
- CASE
-  if dcol[I] < len(y) then y:=prepend(y,0) end;
-  if dcol[I] > len(y) then y:=append(y,0) end;
-  DEFAULT y:=concat(y[1..dcol[I]-1],0,y[dcol[I]..len(y)]);
- end;
+  if dcol[I] < len(y) then y:=prepend(y,0); continue; end;
+  if dcol[I] > len(y) then y:=append(y,0); continue; end;
+  y:=concat(y[1..dcol[I]-1],0,y[dcol[I]..len(y)]);
 end;
 
 return [x,y];
