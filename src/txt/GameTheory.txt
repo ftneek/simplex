@@ -16,17 +16,13 @@ solveGame(p):=
 begin
 local (d:=dim(p)),(r:=pureCheck(p));
 // step 1: check for pure strategies
-if dim(r[2])!=1 then
- return r;
-end;
+if dim(r[2])!=1 then return r end;
 
 // no pure strategy
 // step 2: find mixed strategies
 
 // use 2x2 shortcut if possible
-if d==[2,2] then
- return twobytwo(p);
-end;
+if d==[2,2] then return twobytwo(p) end;
 
 // if not, try to reduce to 2x2 using dominant strategies
 p:=dominance(p);
@@ -64,24 +60,22 @@ end;
 // (x_i/y_j) the is probabilitiy (P1/P2) should play (s_i/t_j)
 simplex_game(p):=
 begin
-local (d:=dim(p)),(alpha:=ABS(min(min(p)))),v,x,y;
+local (d:=dim(p)),(alpha:=abs(min(min(p)))),v,x,y;
 
 //set up dual y' system
 if alpha then p:=p.+alpha end;
 p:=concat(p,identity(d[1]));
-p:=append(p,[op(concat(makelist(-1,X,1,d[2]),makelist(0,X,1,d[1])))]);
-p:=ADDCOL(p,concat(makelist(1,X,1,d[1]),0),d[2]+d[1]+1);
+p:=append(p,[op(concat(makelist(-1,1,d[2]),makelist(0,1,d[1])))]);
+p:=ADDCOL(p,concat(makelist(1,1,d[1]),0),d[2]+d[1]+1);
 
 p:=simplex(p);
 v:=1/-p[1];
 y:=redim(p[0],d[2]);
 x:=p[2][0][d[2]+1..d[2]+d[1]];
-
 y*=v;
 x*=v;
 if alpha then v-=alpha end;
 return [v,transpose(x),transpose(y)];
-
 end;
 
 // returns [v,x,y] for pure strategies
@@ -90,7 +84,7 @@ end;
 // a column of (x/y) is a pure strategy for (P1/P2)
 // if dim(x)!=1 then PURE STRATEGY
 // ex x:=transpose([[1,0,0],
-//            [0,1,0]);
+//                  [0,1,0]);
 //    y:=transpose([0,0,0,1]);
 // means pure strategies @ (s1,t4) and (s2,t4)
 pureCheck(a)
@@ -102,51 +96,35 @@ if d==1 then
 end;
 maxMinRow:=col(a,0);
 minMaxCol:=a[1];
-for I from 1 to d[1] do
-maxMinRow[I]:=min(a[I]);
-end;
+for I from 1 to d[1] do maxMinRow[I]:=min(a[I]) end;
 u[1]:=max(maxMinRow);
 
-for I from 1 to d[2] do
-minMaxCol[I]:=max(col(a,I));
-end;
+for I from 1 to d[2] do minMaxCol[I]:=max(col(a,I)) end;
 u[2]:=min(minMaxCol);
 
 if u[1]==u[2] then
- for I from POS(maxMinRow,u[1]) to d[1] do
-  for J from POS(minMaxCol,u[2]) to d[2] do
+ for I from contains(maxMinRow,u[1]) to d[1] do
+  for J from contains(minMaxCol,u[2]) to d[2] do
    if maxMinRow[I]==minMaxCol[J] then
-    if len(saddle)==0 then
-     saddle:=[I,J];
-    else
-     if len(saddle)==2 AND len(saddle[1])==1 then
-      saddle:=append([saddle],[I,J]);
-     else
-      saddle:=append(saddle,[I,J]);
-     end;
+    if len(saddle)==0 then saddle:=[I,J];
+    else if len(saddle)==2 and len(saddle[1])==1 then saddle:=append([saddle],[I,J]) else saddle:=append(saddle,[I,J]) end;
     end;
    end;
   end;
  end;
- if dim(dim(saddle))!=2 then
-  saddle:=[saddle];
- end;
+ if dim(dim(saddle))!=2 then saddle:=[saddle] end;
  K:=col(saddle,1);
  for I from 1 to len(K) do
-  J:=[op(makelist(0,X,1,d[1]))];
+  J:=[op(makelist(0,1,d[1]))];
   J[K[I]]:=1;
-  if not contains(x,J) then
-   x:=append(x,J);
-  end;
+  if not(contains(x,J)) then x:=append(x,J) end;
  end;
 
  K:=col(saddle,2);
  for I from 1 to len(K) do
-  J:=[op(makelist(0,X,1,d[2]))];
+  J:=[op(makelist(0,1,d[2]))];
   J[K[I]]:=1;
-  if not contains(y,J) then
-   y:=append(y,J);
-  end;
+  if not(contains(y,J)) then y:=append(y,J) end;
  end;
 
 // [value of the game, Pure strategy @ saddle points]
@@ -176,9 +154,7 @@ end;
 checkRow(row1,row2):=
 begin
 local (n:=len(row1)),I;
-for I from 1 to n do
- if row2[I]<row1[I] then return 0 end;
-end;
+for I from 1 to n do if row2[I]<row1[I] then return 0 end end;
 return 1;
 end;
 
@@ -188,36 +164,28 @@ dominance(m):=
 begin
 local (a:=1),(d:=dim(m)),(drow:=[]),(dcol:=[]),I,J;
 
-WHILE m!=a AND d!=[2,2] do
+while m!=a and d!=[2,2] do
  a:=m;
  for I from 1 to d[1] do
   for J from 1 to d[1] do
-   if I!=J AND checkRow(m[I],m[J])>0 then
+   if I!=J and checkRow(m[I],m[J])>0 then
     m:=delrow(m,I);
-    if len(drow)>0 then
-     drow:=append(drow,I+len(drow));
-    else
-     drow:=append(drow,I);
-    end;
+    if len(drow)>0 then drow:=append(drow,I+len(drow)) else drow:=append(drow,I) end;
     d[1]-=1;
     I-=1;
-    BREAK;
+    break;
     end;
   end;
  end;
 
  for I from 1 to d[2] do
   for J from 1 to d[2] do
-   if I!=J AND checkRow(col(m,J),col(m,I))>0 then
+   if I!=J and checkRow(col(m,J),col(m,I))>0 then
     m:=delcol(m,I);
-    if len(dcol)>0 then
-     dcol:=append(dcol,I+len(dcol));
-    else
-     dcol:=append(dcol,I);
-    end;
+    if len(dcol)>0 then dcol:=append(dcol,I+len(dcol)) else dcol:=append(dcol,I) end;
     d[2]-=1;
     I-=1;
-    BREAK;
+    break;
     end;
   end;
  end;
@@ -248,7 +216,6 @@ for I from 1 to len(dcol) do
 end;
 
 return [x,y];
-
 end;
 
 // accepts payoff matrix and probabilities X0,Y0
@@ -269,18 +236,10 @@ if x!=[] then
   x:=transpose(x);
   d:=[d[2],d[1]];
  end;
- for I from 1 to d[2] do
-  n:=append(n,min(col(x,I)*m));
- end;
-else
-v[1]:=0;
-end;
+ for I from 1 to d[2] do n:=append(n,min(col(x,I)*m)) end;
+else v[1]:=0 end;
 
-if v[1] then
- v[1]:=max(n);
-else
- v[1]:=[];
-end;
+if v[1] then v[1]:=max(n) else v[1]:=[] end;
 
 n:=[];
 if y!=[] then
@@ -293,20 +252,11 @@ if y!=[] then
   y:=transpose(y);
   d:=[d[2],d[1]];
  end;
- for I from 1 to d[2] do
-  n:=append(n,max(m*col(y,I)));
- end;
-else
-v[2]:=0;
-end;
+ for I from 1 to d[2] do n:=append(n,max(m*col(y,I))) end;
+else v[2]:=0 end;
 
-if v[2] then
- v[2]:=min(n);
-else
- v[2]:=[];
-end;
+if v[2] then v[2]:=min(n) else v[2]:=[] end;
 
 return [v[1],v[2]];
 end;
-
 #end

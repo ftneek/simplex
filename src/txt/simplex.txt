@@ -1,6 +1,6 @@
 // Author: @ftneek
 // Thanks: @Albert Chan for their contributions
-// Last revised: 2024/11/17
+// Last revised: 2024/11/26
 // Reference: An Introduction to Linear Programming and Game Theory 3rd Edition, Paul R. Thie and Gerard E. Keough (ISBN: 978-0470232866)
 
 // TODO: use cas commands
@@ -9,11 +9,10 @@
 // TODO: create pdf documentation
 // TODO: improve efficiency of unrestricted variables: (how does this interact with integer restrictions?)
 // TODO: Sensitivity Analysis: changes in b, changes in c, add a constraint, add a variable, (changes in A?)
-// TODO: Branch and (Bound/Cut) (lpsolve(x1+x2,[1867*x1+1913*x2=3618894],assume=nonnegint,lp_verbose=true) RETURNS NO SOLUTION on simplex_int())
+// TODO: Branch and (Bound/Cut) (lpsolve(x1+x2,[1867*x1+1913*x2=3618894],assume=nonnegint,lp_verbose=true) returns NO_SOLUTIONS() on simplex_int())
 // TODO: alternative constraints
 // TODO: non {0,1} binary variables xi={x or y} for some x,y
 // TODO: Apply Bland's rule on degenerate pivots only? "The anti-cycling rule need only be applied on degenerate pivots, since cycling can only occur in the presence of degeneracy."
-// TODO: investigate indexing in simplex_int(); test13() and/or test14() fail without it, but does it work for other problems?
 // TODO: Generate random problems
 // TODO: read problems from a file
 
@@ -29,7 +28,9 @@
 // a positive value for dir[1] indicates maximization, a negative value indicates minimization. for no "=" and max use inf, for min use -inf
 // optionally, provide only dir[1] (not a list) for no ">="
 // or provide only dir[2] (a list) for no "=" / NOT IMPLIMENTED YET
-// 'integers', 'binary', and 'unrestricted' are lists of indices of variables with integer/binary/unrestrictricted restriction
+// 'integers' is a list of indices of variables with integer restriction.
+// 'binary' is a list of indices of variables with binary restriction.
+// 'unrestricted' is a list of indices of variables without nonnegative restriction.
 
 // simplex_core(a,bv,art,ign,P) is an implementation of the Simplex Algorithm
 // a is a linear program in canonical form
@@ -39,7 +40,7 @@
 // P is the number of pivot1 operations (0 for initial tableaus, else P>0)
 
 // simplex_int(a,bv,v,art,ign,P,integers) is an implementation of Gomory's Plane Cutting Algorithm and can be used for pure or mixed integer problems.
-// 'integers' is a list of variable indices with integer restriction, other arguments match simplex_core().
+// arguments are from simplex() and simplex_core().
 
 #cas
 lpmax:=inf;
@@ -230,11 +231,11 @@ minRatio(a,b,n):=
  begin
  local i, ratio, (j:=0), (minratio:=inf);
  for i from 1 to len(b)-n do
-  if a[i]<=0 then continue end
+  if a[i]<=0 then continue end;
   ratio:=b[i]/a[i];
-  if minratio>ratio then minratio:=ratio; j:=i end
+  if minratio>ratio then minratio:=ratio; j:=i end;
  end;
- return j
+ return j;
 end;
 
 // Gomory's Plane Cutting Algorithm
@@ -280,15 +281,8 @@ simplex_int(a,bv,art,ign,P,integers):=
   x[d[2]-ign]:=1;
   bv[d[1]]:=d[2]-ign; // pivot on 1
 
-  a:=redim(a,[d[1],d[2]-1]);
   a:=ADDCOL(a,b-b,d[2]-ign);
-
-// TODO: Investigate these lines
-  if ign then I:=0 else I:=1 end;
-  a:=ADDCOL(a,b,d[2]+I);
-// End Investigation
-
-  a:=ADDROW(a,x,d[1]);
+  a:=insert(a,d[1],x);
 
 // Step 3: solve with new constraint
   a:=simplex_core(a,bv,0,ign,P);
@@ -301,7 +295,7 @@ artrow(col,art):=append(makelist(k->k>col-art,2,col),0);
 addartrow(a,art):=  /* art vars are valid pivots */
 begin
  local c:=len(a[1]);
- if art<=0 then return a end
- append(a,artrow(c,art)-sum(a[contains(col(a,J),1)],J,c-art,c-1))
+ if art<=0 then return a end;
+ append(a,artrow(c,art)-sum(a[contains(col(a,J),1)],J,c-art,c-1));
 end;
 #end
