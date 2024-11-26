@@ -1,5 +1,5 @@
 //Author: @ftneek
-//Last Edit: 2023/12/21
+//Last Edit: 2024/11/26
 //TODO: add shortcuts for mx2 and 2xn games
 //TODO: look to optimize pureCheck()
 //TODO: look to optimize dominance()
@@ -66,7 +66,7 @@ local (d:=dim(p)),(alpha:=abs(min(min(p)))),v,x,y;
 if alpha then p:=p.+alpha end;
 p:=concat(p,identity(d[1]));
 p:=append(p,[op(concat(makelist(-1,1,d[2]),makelist(0,1,d[1])))]);
-p:=ADDCOL(p,concat(makelist(1,1,d[1]),0),d[2]+d[1]+1);
+p:=addcol1(p,concat(makelist(1,1,d[1]),0),d[2]+d[1]+1);
 
 p:=simplex(p);
 v:=1/-p[1];

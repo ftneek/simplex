@@ -3,7 +3,7 @@
 // Last revised: 2024/11/26
 // Reference: An Introduction to Linear Programming and Game Theory 3rd Edition, Paul R. Thie and Gerard E. Keough (ISBN: 978-0470232866)
 
-// TODO: use cas commands
+// TODO: handle 0-based indexing to be compatible with Xcas (and python_compat mode)
 // TODO: symbolic input
 // TODO: omit arguments from simplex() if they are not needed
 // TODO: create pdf documentation
@@ -67,7 +67,7 @@ end;
 if c:=len(unrestricted) then
  for I from c downto 1 do
   b:=col(a,unrestricted[I]);
-  a:=ADDCOL(a,-b,unrestricted[I]+1);
+  a:=addcol1(a,-b,unrestricted[I]+1);
   if n:=contains(integers,unrestricted[I]) then
    integers:=extend(integers,0);
    for J from len(integers) downto n+1 do integers[J]:=integers[J-1]+1 end;
@@ -281,7 +281,7 @@ simplex_int(a,bv,art,ign,P,integers):=
   x[d[2]-ign]:=1;
   bv[d[1]]:=d[2]-ign; // pivot on 1
 
-  a:=ADDCOL(a,b-b,d[2]-ign);
+  a:=addcol1(a,b-b,d[2]-ign);
   a:=insert(a,d[1],x);
 
 // Step 3: solve with new constraint
@@ -290,6 +290,7 @@ simplex_int(a,bv,art,ign,P,integers):=
 return a;
 end;
 
+addcol1(m,c,ind):=transpose(insert(transpose(a),ind,c));
 pivot1(m,j,k) := pivot((m[j]:=m[j]/m[j][k]),j,k);
 artrow(col,art):=append(makelist(k->k>col-art,2,col),0);
 addartrow(a,art):=  /* art vars are valid pivots */
