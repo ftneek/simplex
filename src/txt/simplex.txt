@@ -290,7 +290,7 @@ simplex_int(a,bv,art,ign,P,integers):=
 return a;
 end;
 
-addcol1(m,c,ind):=transpose(insert(transpose(a),ind,c));
+addcol1(m,c,ind):=transpose(insert(transpose(m),ind,c));
 pivot1(m,j,k) := pivot((m[j]:=m[j]/m[j][k]),j,k);
 artrow(col,art):=append(makelist(k->k>col-art,2,col),0);
 addartrow(a,art):=  /* art vars are valid pivots */
