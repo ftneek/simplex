@@ -13,32 +13,32 @@
 // a column of (x/y) is a strategy for (P1/P2)
 // for a given strategy (x_i/y_i) is the probabilitiy (P1/P2) should play (s_i/t_j)
 solveGame(p):=
-BEGIN
-LOCAL (d:=dim(p)),(r:=pureCheck(p));
+begin
+local (d:=dim(p)),(r:=pureCheck(p));
 // step 1: check for pure strategies
-IF dim(r[2])!=1 THEN
- RETURN r;
-END;
+if dim(r[2])!=1 then
+ return r;
+end;
 
 // no pure strategy
 // step 2: find mixed strategies
 
 // use 2x2 shortcut if possible
-IF d==[2,2] THEN
- RETURN twobytwo(p);
-END;
+if d==[2,2] then
+ return twobytwo(p);
+end;
 
 // if not, try to reduce to 2x2 using dominant strategies
 p:=dominance(p);
-IF dim(p[1])==[2,2] THEN
+if dim(p[1])==[2,2] then
  // use 2x2 if reduced to 2x2
  d:=twobytwo(p[1]);
  // insert 0 for deleted rows and columns
  d[2..3]:=insertZeros(col(d[2],1),col(d[3],1),p[2],p[3]);
- d[2]:=trn(d[2]);
- d[3]:=trn(d[3]);
- RETURN d;
-END;
+ d[2]:=transpose(d[2]);
+ d[3]:=transpose(d[3]);
+ return d;
+end;
 
 //TODO: use mx2 method if possible
 //TODO: use 2xn method if possible
@@ -47,15 +47,15 @@ END;
 r:=simplex_game(p[1]);
 
 // insert 0 for deleted rows and columns
-IF len(p[2])>0 OR len(p[3])>0 THEN
+if len(p[2])>0 or len(p[3])>0 then
  r[2..3]:=insertZeros(col(r[2],1),col(r[3],1),p[2],p[3]);
- r[2]:=trn(r[2]);
- r[3]:=trn(r[3]);
-END;
+ r[2]:=transpose(r[2]);
+ r[3]:=transpose(r[3]);
+end;
 
-RETURN r;
+return r;
 
-END;
+end;
 
 // solves 2 person zero sum game by simplex algorithm
 // assumes no pure strategy, no more reduction by dominance
@@ -63,14 +63,14 @@ END;
 // v is value of the game
 // (x_i/y_j) the is probabilitiy (P1/P2) should play (s_i/t_j)
 simplex_game(p):=
-BEGIN
-LOCAL (d:=dim(p)),(alpha:=ABS(MIN(MIN(p)))),v,x,y;
+begin
+local (d:=dim(p)),(alpha:=ABS(min(min(p)))),v,x,y;
 
 //set up dual y' system
-IF alpha THEN p:=p.+alpha END;
-p:=CONCAT(p,IDENMAT(d[1]));
-p:=append(p,[op(CONCAT(MAKELIST(-1,X,1,d[2]),MAKELIST(0,X,1,d[1])))]);
-p:=ADDCOL(p,CONCAT(MAKELIST(1,X,1,d[1]),0),d[2]+d[1]+1);
+if alpha then p:=p.+alpha end;
+p:=concat(p,identity(d[1]));
+p:=append(p,[op(concat(makelist(-1,X,1,d[2]),makelist(0,X,1,d[1])))]);
+p:=ADDCOL(p,concat(makelist(1,X,1,d[1]),0),d[2]+d[1]+1);
 
 p:=simplex(p);
 v:=1/-p[1];
@@ -79,234 +79,234 @@ x:=p[2][0][d[2]+1..d[2]+d[1]];
 
 y*=v;
 x*=v;
-IF alpha THEN v-=alpha END;
-return [v,trn(x),trn(y)];
+if alpha then v-=alpha end;
+return [v,transpose(x),transpose(y)];
 
-END;
+end;
 
 // returns [v,x,y] for pure strategies
 // returns [u1,u2] for no pure strategy
 // v is value of the game
 // a column of (x/y) is a pure strategy for (P1/P2)
-// IF dim(x)!=1 THEN PURE STRATEGY
-// ex x:=trn([[1,0,0],
+// if dim(x)!=1 then PURE STRATEGY
+// ex x:=transpose([[1,0,0],
 //            [0,1,0]);
-//    y:=trn([0,0,0,1]);
+//    y:=transpose([0,0,0,1]);
 // means pure strategies @ (s1,t4) and (s2,t4)
 pureCheck(a)
-BEGIN
-LOCAL (d:=dim(a)),maxMinRow,minMaxCol,(u:=[1,-1]),J,K,(saddle:=[]),(x:=[]),(y:=[]);
-IF d==1 THEN
+begin
+local (d:=dim(a)),maxMinRow,minMaxCol,(u:=[1,-1]),J,K,(saddle:=[]),(x:=[]),(y:=[]);
+if d==1 then
  a:=[a];
  d:=[1,1];
-END;
+end;
 maxMinRow:=col(a,0);
 minMaxCol:=a[1];
-FOR I FROM 1 TO d[1] DO
-maxMinRow[I]:=MIN(a[I]);
-END;
-u[1]:=MAX(maxMinRow);
+for I from 1 to d[1] do
+maxMinRow[I]:=min(a[I]);
+end;
+u[1]:=max(maxMinRow);
 
-FOR I FROM 1 TO d[2] DO
-minMaxCol[I]:=MAX(col(a,I));
-END;
-u[2]:=MIN(minMaxCol);
+for I from 1 to d[2] do
+minMaxCol[I]:=max(col(a,I));
+end;
+u[2]:=min(minMaxCol);
 
-IF u[1]==u[2] THEN
- FOR I FROM POS(maxMinRow,u[1]) TO d[1] DO
-  FOR J FROM POS(minMaxCol,u[2]) TO d[2] DO
-   IF maxMinRow[I]==minMaxCol[J] THEN
-    IF len(saddle)==0 THEN
+if u[1]==u[2] then
+ for I from POS(maxMinRow,u[1]) to d[1] do
+  for J from POS(minMaxCol,u[2]) to d[2] do
+   if maxMinRow[I]==minMaxCol[J] then
+    if len(saddle)==0 then
      saddle:=[I,J];
-    ELSE
-     IF len(saddle)==2 AND len(saddle[1])==1 THEN
+    else
+     if len(saddle)==2 AND len(saddle[1])==1 then
       saddle:=append([saddle],[I,J]);
-     ELSE
+     else
       saddle:=append(saddle,[I,J]);
-     END;
-    END;
-   END;
-  END;
- END;
- IF dim(dim(saddle))!=2 THEN
+     end;
+    end;
+   end;
+  end;
+ end;
+ if dim(dim(saddle))!=2 then
   saddle:=[saddle];
- END;
+ end;
  K:=col(saddle,1);
- FOR I FROM 1 to len(K) DO
-  J:=[op(MAKELIST(0,X,1,d[1]))];
+ for I from 1 to len(K) do
+  J:=[op(makelist(0,X,1,d[1]))];
   J[K[I]]:=1;
-  IF NOT contains(x,J) THEN
+  if not contains(x,J) then
    x:=append(x,J);
-  END;
- END;
+  end;
+ end;
 
  K:=col(saddle,2);
- FOR I FROM 1 to len(K) DO
-  J:=[op(MAKELIST(0,X,1,d[2]))];
+ for I from 1 to len(K) do
+  J:=[op(makelist(0,X,1,d[2]))];
   J[K[I]]:=1;
-  IF NOT contains(y,J) THEN
+  if not contains(y,J) then
    y:=append(y,J);
-  END;
- END;
+  end;
+ end;
 
 // [value of the game, Pure strategy @ saddle points]
- RETURN [u[1],trn(x),trn(y)]
-END;
+ return [u[1],transpose(x),transpose(y)]
+end;
 
 // No pure strategy
-RETURN [u[1],u[2]];
-END;
+return [u[1],u[2]];
+end;
 
 twobytwo(m):=
-BEGIN
-LOCAL a,b,c,(d:=dim(m)),r,v,(l:=[]);
-IF d==[2,2] THEN
+begin
+local a,b,c,(d:=dim(m)),r,v,(l:=[]);
+if d==[2,2] then
  a:=m[1][1];
  b:=m[1][2];
  c:=m[2][1];
  d:=m[2][2];
  r:=a+d-b-c;
  v:=(a*d-b*c)/r;
- l:=[v,trn([(d-c)/r,(a-b)/r]),trn([(d-b)/r,(a-c)/r])];
-END;
-RETURN l;
-END;
+ l:=[v,transpose([(d-c)/r,(a-b)/r]),transpose([(d-b)/r,(a-c)/r])];
+end;
+return l;
+end;
 
 //helper for dominance
 checkRow(row1,row2):=
-BEGIN
-LOCAL (n:=len(row1)),I;
-FOR I FROM 1 TO n DO
- IF row2[I]<row1[I] THEN RETURN 0 END;
-END;
-RETURN 1;
-END;
+begin
+local (n:=len(row1)),I;
+for I from 1 to n do
+ if row2[I]<row1[I] then return 0 end;
+end;
+return 1;
+end;
 
 // uses dominant strategies to reduce a payoff matrix to dim [2,2]
 // returns list of [m', [indices of deleted rows], [indices of deleted columns]]
 dominance(m):=
-BEGIN
-LOCAL (a:=1),(d:=dim(m)),(drow:=[]),(dcol:=[]),I,J;
+begin
+local (a:=1),(d:=dim(m)),(drow:=[]),(dcol:=[]),I,J;
 
-WHILE m!=a AND d!=[2,2] DO
+WHILE m!=a AND d!=[2,2] do
  a:=m;
- FOR I FROM 1 to d[1] DO
-  FOR J FROM 1 to d[1] DO
-   IF I!=J AND checkRow(m[I],m[J])>0 THEN
+ for I from 1 to d[1] do
+  for J from 1 to d[1] do
+   if I!=J AND checkRow(m[I],m[J])>0 then
     m:=delrow(m,I);
-    IF len(drow)>0 THEN
+    if len(drow)>0 then
      drow:=append(drow,I+len(drow));
-    ELSE
+    else
      drow:=append(drow,I);
-    END;
+    end;
     d[1]-=1;
     I-=1;
     BREAK;
-    END;
-  END;
- END;
+    end;
+  end;
+ end;
 
- FOR I FROM 1 to d[2] DO
-  FOR J FROM 1 to d[2] DO
-   IF I!=J AND checkRow(col(m,J),col(m,I))>0 THEN
+ for I from 1 to d[2] do
+  for J from 1 to d[2] do
+   if I!=J AND checkRow(col(m,J),col(m,I))>0 then
     m:=delcol(m,I);
-    IF len(dcol)>0 THEN
+    if len(dcol)>0 then
      dcol:=append(dcol,I+len(dcol));
-    ELSE
+    else
      dcol:=append(dcol,I);
-    END;
+    end;
     d[2]-=1;
     I-=1;
     BREAK;
-    END;
-  END;
- END;
+    end;
+  end;
+ end;
 
-END;
-RETURN [m,drow,dcol];
-END;
+end;
+return [m,drow,dcol];
+end;
 
 // inserts zeros into x for deleted rows and into y for deleted columns
 // returns [x',y']
 insertZeros(x,y,drow,dcol):=
-BEGIN
+begin
 
-FOR I FROM 1 TO len(drow) DO
+for I from 1 to len(drow) do
  CASE
-  IF drow[I] < len(x) THEN x:=prepend(x,0) END;
-  IF drow[I] > len(x) THEN x:=append(x,0) END;
-  DEFAULT x:=CONCAT(x[1..drow[I]-1],0,x[drow[I]..len(x)]);
- END;
-END;
+  if drow[I] < len(x) then x:=prepend(x,0) end;
+  if drow[I] > len(x) then x:=append(x,0) end;
+  DEFAULT x:=concat(x[1..drow[I]-1],0,x[drow[I]..len(x)]);
+ end;
+end;
 
-FOR I FROM 1 TO len(dcol) DO
+for I from 1 to len(dcol) do
  CASE
-  IF dcol[I] < len(y) THEN y:=prepend(y,0) END;
-  IF dcol[I] > len(y) THEN y:=append(y,0) END;
-  DEFAULT y:=CONCAT(y[1..dcol[I]-1],0,y[dcol[I]..len(y)]);
- END;
-END;
+  if dcol[I] < len(y) then y:=prepend(y,0) end;
+  if dcol[I] > len(y) then y:=append(y,0) end;
+  DEFAULT y:=concat(y[1..dcol[I]-1],0,y[dcol[I]..len(y)]);
+ end;
+end;
 
-RETURN [x,y];
+return [x,y];
 
-END;
+end;
 
 // accepts payoff matrix and probabilities X0,Y0
 // (X0/Y0) may be empty list or matrix of (X/Y)
 // a column of (X/Y) is a potential strategy
 // returns bounds for [v1,v2] for given (X_i/Y_i)
 verifySecurityLevels(m,x,y):=
-BEGIN
-LOCAL d,(d1:=dim(m)),(n:=[]),(v:=[-1,1]);
+begin
+local d,(d1:=dim(m)),(n:=[]),(v:=[-1,1]);
 
-IF x!=[] THEN
+if x!=[] then
  d:=dim(x);
- IF dim(d)!=2 THEN
-  x:=trn(x);
+ if dim(d)!=2 then
+  x:=transpose(x);
   d:=[d,1];
- END;
- IF d[1]<d1[1] THEN
-  x:=trn(x);
+ end;
+ if d[1]<d1[1] then
+  x:=transpose(x);
   d:=[d[2],d[1]];
- END;
- FOR I FROM 1 TO d[2] DO
-  n:=append(n,MIN(col(x,I)*m));
- END;
-ELSE
+ end;
+ for I from 1 to d[2] do
+  n:=append(n,min(col(x,I)*m));
+ end;
+else
 v[1]:=0;
-END;
+end;
 
-IF v[1] THEN
- v[1]:=MAX(n);
-ELSE
+if v[1] then
+ v[1]:=max(n);
+else
  v[1]:=[];
-END;
+end;
 
 n:=[];
-IF y!=[] THEN
+if y!=[] then
  d:=dim(y);
- IF dim(d)!=2 THEN
-  y:=trn(y);
+ if dim(d)!=2 then
+  y:=transpose(y);
   d:=[d,1];
- END;
- IF d[1]<d1[2] THEN
-  y:=trn(y);
+ end;
+ if d[1]<d1[2] then
+  y:=transpose(y);
   d:=[d[2],d[1]];
- END;
- FOR I FROM 1 TO d[2] DO
-  n:=append(n,MAX(m*col(y,I)));
- END;
-ELSE
+ end;
+ for I from 1 to d[2] do
+  n:=append(n,max(m*col(y,I)));
+ end;
+else
 v[2]:=0;
-END;
+end;
 
-IF v[2] THEN
- v[2]:=MIN(n);
-ELSE
+if v[2] then
+ v[2]:=min(n);
+else
  v[2]:=[];
-END;
+end;
 
-RETURN [v[1],v[2]];
-END;
+return [v[1],v[2]];
+end;
 
 #end
