@@ -15,7 +15,6 @@
 // TODO: Generate random problems
 // TODO: read problems from a file
 
-
 // simplex(a,[dir],[integers],[binary],[unrestricted]) accepts 1-5 arguments
 // 'a' is a linear program as an augmented matrix [ A| b
 //                                                 --+--
@@ -288,6 +287,27 @@ simplex_int(a,bv,art,ign,P,integers):=
   a:=simplex_core(a,bv,0,ign,P);
  end;
 return a;
+end:;
+
+// Maps a basis to an id
+// Basis is the basis and n is the total number of variables
+basis_to_id(Basis,n):=
+begin
+local (ID:=0),(l:=len(Basis)),(l1:=-not(istart())),(I:=0);
+for I from 1 to l do ID+= comb(Basis[I+l1]-1,I) end;
+return ID;
+end:;
+
+// Returns the basis mapped to the provided id, given n variables and b variables in the basis
+id_to_basis(ID, n, b):=
+begin
+local (Basis:=[]),(x:=ID),(start:=-1),(v:=2*(1-contains(version(),"giac"))),(I:=0),(J:=0);
+for J in range(b,v,-1) do
+ for I in range(1,n+1) do if comb(I-1,J) <= x then start:=I else break end end;
+ Basis:=append(Basis,start);
+ x-=comb(start-1,J);
+end;
+return reverse(Basis);
 end:;
 
 istart():=begin [1,0][1]==1 end:;

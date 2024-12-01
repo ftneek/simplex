@@ -1,0 +1,3334 @@
+// xcas version=1.9.0 fontsize=16 font=0 currentlevel=0 pixon=1
+// fltk 7Fl_Tile 20 62 1142 644 16 0
+[
+// fltk N4xcas7EditeurE 20 62 1142 360 16 0
+11328 0  ,
+// Author: @ftneek
+// Thanks: @Albert Chan for their contributions
+// Last revised: 2024/11/30
+// Reference: An Introduction to Linear Programming and Game Theory 3rd Edition, Paul R. Thie and Gerard E. Keough (ISBN: 978-0470232866)
+
+// TODO: symbolic input
+// TODO: omit arguments from simplex() if they are not needed
+// TODO: create pdf documentation
+// TODO: improve efficiency of unrestricted variables: (how does this interact with integer restrictions?)
+// TODO: Sensitivity Analysis: changes in b, changes in c, add a constraint, add a variable, (changes in A?)
+// TODO: Branch and (Bound/Cut) (lpsolve(x1+x2,[1867*x1+1913*x2=3618894],assume=nonnegint,lp_verbose=true) returns NO_SOLUTIONS() on simplex_int())
+// TODO: alternative constraints
+// TODO: non {0,1} binary variables xi={x or y} for some x,y
+// TODO: Apply Bland's rule on degenerate pivots only? "The anti-cycling rule need only be applied on degenerate pivots, since cycling can only occur in the presence of degeneracy."
+// TODO: Generate random problems
+// TODO: read problems from a file
+
+
+// simplex(a,[dir],[integers],[binary],[unrestricted]) accepts 1-5 arguments
+// 'a' is a linear program as an augmented matrix [ A| b
+//                                                 --+--
+//                                                  c|-z0]
+// If there are any "=" constraints, they should be the first rows of the linear program.
+// If there are any ">=" constraints, they should be the last rows of the linear program.
+// The objective function should be the final row of the linear program, with the constant negated in the last index.
+// [dir] is a list of 2 items; dir[1] is the number of "=" constraints and dir[2] is the number of ">=" constraints.
+// a positive value for dir[1] indicates maximization, a negative value indicates minimization. for no "=" and max use inf, for min use -inf
+// optionally, provide only dir[1] (not a list) for no ">="
+// or provide only dir[2] (a list) for no "=" / NOT IMPLIMENTED YET
+// 'integers' is a list of indices of variables with integer restriction.
+// 'binary' is a list of indices of variables with binary restriction.
+// 'unrestricted' is a list of indices of variables without nonnegative restriction.
+
+// simplex_core(a,bv,art,ign,P) is an implementation of the Simplex Algorithm
+// a is a linear program in canonical form
+// bv is a list of basic variable indices
+// art is the number of unused artificial variables
+// ign is the number of used artificial variables (nonzero when you add a constraint to a final tableau that had artificial variables, then ign+=art and art:=numNewConstraints)
+// P is the number of pivot1 operations (0 for initial tableaus, else P>0)
+
+// simplex_int(a,bv,v,art,ign,P,integers) is an implementation of Gomory's Plane Cutting Algorithm and can be used for pure or mixed integer problems.
+// arguments are from simplex() and simplex_core().
+
+lpmax:=inf;
+lpmin:=-inf;
+NO_SOLUTIONS():=contains(version(),"HP Prime") ? STRINGFROMID("AppQuadE_LinearSolverNoSolution") : "No solutions":;
+
+simplex(a):=
+begin
+local (art:=0),(dir:=-inf),(binary:=[]),(integers:=[]),(unrestricted:=[]);
+local b,c,d,v,bv,n,I,J,(ge:=0),(l:=-not(istart()));
+
+if dim(d:=dim(a))!=2 then
+ if d>5 then error(a) end;
+ a,dir,integers,binary,unrestricted := a;
+ if type(dir)==DOM_LIST then
+  if dim(dir)!=2 then error(dir,'size!=2') end;
+  art,ge:=dir;
+  dir:=art;
+ end;
+ if (art:=abs(dir))==inf then art:=0 end;
+ d:=dim(a);
+end;
+
+if c:=len(unrestricted) then
+ for I from c downto 1 do
+  b:=col(a,unrestricted[I+l]+l);
+  a:=addcol1(a,-b,unrestricted[I+l]+1+l);
+  if n:=contains(integers,unrestricted[I+l]) then
+   integers:=extend(integers,0);
+   for J from len(integers) downto n+1 do integers[J+l]:=integers[J-1+l]+1+l end;
+  end;
+ end;
+d[2+l]+=c;
+end;
+
+c:=row(a,d[1+l]+l);
+a:=delrows(a,d[1+l]+l);
+
+if b:=len(binary) then
+ v:=[];
+ for I from 1 to b do
+  n:=makelist(d[2+l]);
+  n[binary[I+l]+l]:=1;
+  n[0+l]:=1;
+  v:=append(v,n);
+ end;
+ a:=append(a,op(v));
+ d[1+l]+=b;
+ integers:=sort(integers union binary);
+end;
+
+b:=col(a,d[2+l]+l);
+a:=delcols(a,d[2+l]+l);
+d:=d.-1;
+
+if ge then
+ for I from 1 to ge do
+  v:=makelist(d[1+l]);
+  v[art+I+l]:=-1;
+  d[2+l]+=1;
+  a:=concat(a,transpose(v));
+ end;
+ art+=ge;
+end;
+
+if art==0 or art==d[1+l] then a:=concat(a,identity(d[1+l]));
+else
+ v:=append(makemat(0,art,d[1+l]-art),op(identity(d[1+l]-art)));
+ v:=concat(v,append(identity(art),op(makemat(0,d[1+l]-art,art))));
+ a:=concat(a,v);
+end;
+a:=concat(a,transpose(b));
+d[2+l]+=1;
+c:=extend(c,makelist(d[1+l]+ge));
+c[0+l]:=c[d[2+l]+l];
+c[d[2+l]+l]:=0;
+a:=append(a,c);
+
+n:=art;
+c,v:=dim(a).-1;  /* constraints, variables */
+bv:=extend(range(v-art+1,v+1),range(d[2+l],v-art+1));
+if dir>0 then a[0+l]:=-a[0+l] end;
+a:=addartrow(a,art);
+if integers == [] then c:=simplex_core(a,bv,art,0,0) else c:=simplex_int(a,bv,art,0,0,integers) end;
+if dir>0 and c[1+l]!=NO_SOLUTIONS() then c[1+l]:=-c[1+l] end;
+//if unrestricted != [] then for I from 1 to len(unrestricted) do c[0][unrestricted[I]]-=c[0][unrestricted[I]+1] end end;
+//if unrestricted != [] then for I from len(unrestricted) downto 1 do c[0]:=delrows(c[0],I+1) end end;
+//return [c[1],c[0]];
+return c;
+end:;
+
+// Returns list [z,m,bv,P,X]
+// z is the minimum, m is the final tableau, bv is a list of basic variables, P is the number of pivot1 operations, X are the optimal inputs
+// if problem was max, then max=-z
+// zâˆˆâ„š,â„,â„¤ for minimum, z=-inf for unbounded, and type(z)==DOM_STRING for empty feasible region / infeasible model
+// a column of X is a solution, X is empty for unbounded z or empty feasible region. len(X[1])>1 for alternate/infinite solutions
+simplex_core(a,bv,art,ign,P):=
+begin
+local (a2:=[]),b,c,(d:=dim(a)),bmin,cmin,(n:=1+(art>0)),(l1:=[]),(l2:=[]),(I:=0),(J:=0),(bvIDS:=[basis_to_id(bv,dim(a)[[2]]-1)]),(bland:=false),(l:=-not(istart()));
+c:=row(a,0+l)[1+l..d[2+l]-(ign+1)+l];
+cmin:=min(c);
+b:=col(a,0+l)[1+l..d[1+l]-n+l];
+bmin:=min(b);
+
+// Step 2: If all ci,biâ‰¥0 go to Step 6
+while cmin<0 or bmin<0 do
+
+// Step 3: For any ci < 0 check for UNBOUNDED SOLUTION
+ for I from 1 to (d[2+l]-1-ign) do if c[I+l] < 0 and max(col(a,I+l))<=0 then return [-inf,a,bv,P,[]] end end;
+
+// Step 4: Determine bv to enter and exit
+ if bland then for I from 1 to (d[2+l]-1-ign) do if c[I+l] < 0 and not(contains(bv,I)) then J:=I end end;
+ else J:=contains(c,cmin) end; // xin
+ I:=minRatio(col(a,J+l),col(a,0+l),n); // xout
+
+// Step 5: Canonical reduction with new bv
+ if bv[I+l]!=J then
+  bv[I+l]:=J;
+  a:=pivot1(a,I+l,J+l); P+=1;
+// If a basis is repeated, use Bland's rule to prevent cycling
+  if contains(bvIDS,(c:=basis_to_id(bv,d[2+l]-1))) then bland:=true; else bvIDS:=append(bvIDS,c) end;
+  c:=row(a,0+l)[1+l..d[2+l]-ign-1+l];
+  if (cmin:=min(c))<0 then continue end;
+ end;
+
+ if cmin>=0 then
+  if art>0 then
+// Check for NO SOLUTION / INFEASIBLE MODEL
+   if a[0+l,0+l] then return [NO_SOLUTIONS(),a,bv,P,[]] end;
+   a:=delrows(a,d[1+l]+l);
+   d[1+l]-=(n:=1);
+   ign+=art;
+   art:=0;
+   c:=row(a,0+l)[1+l..d[2+l]-ign-1+l];
+   cmin:=min(c);
+  else
+   b:=col(a,0+l)[1+l..d[1+l]-n+l];
+   bmin:=min(b);
+// if âˆƒbi<0, use Dual Simplex
+   if bmin<0 then
+// For any bi < 0 check for NO SOLUTION
+    for I from 1 to len(b) do if b[I+l]<0 and min(row(a,I+l)[1+l..d[2+l]-1-ign+l])>=0 then return [NO_SOLUTIONS(),a,bv,P,[]] end end;
+    I:=contains(b,bmin);
+    J:=minRatio(-a[I+l],c,0); /* max ratio */
+    bv[I+l]:=J;
+    a:=pivot1(a,I+l,J+l); P+=1;
+    c:=row(a,0+l)[1+l..d[2+l]-ign-1+l];
+    cmin:=min(c);
+   end;
+  end;
+ end;
+end;
+
+// Step 6: ci,biâ‰¥0 optimum achieved
+l1:=sol(a);
+
+a2:=a;
+c:=row(a2,0+l)[1+l..d[2+l]-ign-1+l];
+// Check for ALTERNATE / INFINITE SOLUTIONS
+for J from 1 to len(c) do
+ if c[J+l] or contains(bv,J) then continue end
+ if (b:=abs(transpose(col(a2,J+l))))==1 or b==0 then continue end
+ I:=minRatio(col(a2,J+l),col(a2,0+l),1);
+ a2:=pivot1(a2,I+l,J+l); P+=1;
+ l2:=sol(a2);
+ if l1==l2 then break end;
+ return [-a[0+l][0+l],a,bv,P,transpose(l1,l2)];
+end;
+
+// UNIQUE SOLUTION
+return [-a[0+l][0+l],a,bv,P,transpose(l1)];
+end:;
+
+sol(a):=
+begin
+ local x,b,c,j,k,(v:=dim(a)[[2]]-1),(l:=-not(istart()));
+ x:=makelist(v); /* all zeroes */
+ b:=col(a,0+l);    /* last column */
+ for j from 1 to v do
+  if abs(transpose(c:=col(a,j+l)))!=1 then continue end
+  if (k:=contains(c,1))==0 then continue end
+  if b[k+l] then x[j+l]:=b[k+l]; b[k+l]:=0 end
+ end;
+ return x;
+end:;
+
+// determine bv to exit
+minRatio(a,b,n):=
+ begin
+ local i, ratio, (j:=0), (minratio:=inf),(l:=-not(istart()));
+ for i from 1 to len(b)-n do
+  if a[i+l]<=0 then continue end;
+  ratio:=b[i+l]/a[i+l];
+  if minratio>ratio then minratio:=ratio; j:=i end;
+ end;
+ return j;
+end:;
+
+// Gomory's Plane Cutting Algorithm
+simplex_int(a,bv,art,ign,P,integers):=
+ begin
+ local b,d,x,(I:=0),(J:=0),(len_int:=len(integers)),(l:=-not(istart()));
+// Step 1: ignore integer restriction, apply simplex
+ a:=simplex_core(a,bv,art,ign,P);
+ ign+=art;
+ art:=0;
+// STOP if there is no solution
+ while(len(x:=a[0+l])) do
+// Check for infinite solutions
+  if len(x[1+l])>1 then
+// remove extra solutions if they are non integer
+   d:=col(x,1+l);
+   for I from 1 to len_int do if type(d[integers[I+l]+l])!=DOM_INT then break end end;
+   d:=col(x,2+l);
+   for J from 1 to len_int do if type(d[integers[J+l]+l])!=DOM_INT then break end end;
+   if J<=len_int then a[0+l]:=delcols(a[0+l],2+l) end;
+   if I<=len_int then a[0+l]:=delcols(a[0+l],1+l) end;
+   if I>len_int or J>len_int then break end;
+  else
+   x:=col(x,1+l);
+// Check for non integer solutions
+   for I from 1 to len_int do if type(x[integers[I+l]+l])!=DOM_INT then break end end;
+  end;
+
+// STOP if the desired variables are integer
+  if I>len_int then break end;
+
+// Step 2: determine constraint with largest fractional part
+  a,bv,P := a[2+l..4+l];
+  d:=dim(a);
+  b:=col(a,d[2+l]+l);
+  x := b[1+l .. d[1+l]-1+l];
+  x -= floor(x);
+  x := a[contains(x, max(x))+l];
+
+// Create new constraint
+  x:=floor(x)-x;
+  for I from d[2+l]+1 downto d[2+l]+1-ign do x[I+l]:=x[I-1+l] end;
+  x[d[2+l]-ign+l]:=1;
+  bv[d[1+l]+l]:=d[2+l]-ign; // pivot on 1
+
+  a:=addcol1(a,b-b,d[2+l]-ign+l);
+  a:=insert(a,d[1+l]+l,x);
+
+// Step 3: solve with new constraint
+  a:=simplex_core(a,bv,0,ign,P);
+ end;
+return a;
+end:;
+
+// Maps a basis to an id
+// Basis is the basis and n is the total number of variables
+basis_to_id(Basis,n):=
+begin
+local (ID:=0),(l:=len(Basis)),(l1:=-not(istart())),(I:=0);
+for I from 1 to l do ID+= comb(Basis[I+l1]-1,I) end;
+return ID;
+end:;
+
+// Returns the basis mapped to the provided id, given n variables and b variables in the basis
+id_to_basis(ID, n, b):=
+begin
+local (Basis:=[]),(x:=ID),(start:=-1),(v:=2*(1-contains(version(),"giac"))),(I:=0),(J:=0);
+
+for J in range(b,v,-1) do
+ for I in range(1,n+1) do if comb(I-1,J) <= x then start:=I else break end end;
+ Basis:=append(Basis,start);
+ x-=comb(start-1,J);
+end;
+return reverse(Basis);
+end:;
+
+istart():=begin [1,0][1]==1 end:;
+addcol1(m,c,ind):=transpose(insert(transpose(m),ind,c)):;
+pivot1(m,j,k) := pivot((m[j]:=m[j]/m[j][k]),j,k):;
+artrow(column,art):=append(makelist(k->k>column-art,2,column),0):;
+addartrow(a,art):=  /* art vars are valid pivots */
+begin
+ local (c:=len(a[[1]])),(l:=-not(istart())),(J:=0),(lrow:=[]),(d:=0);
+ if art<=0 then return a end;
+ for J in range(c-art,c) do if d:=(contains(col(a,J+l),1)) then lrow+=a[d+l] end end;
+ append(a,artrow(c,art)-lrow);
+end:;,
+// fltk N4xcas10Log_OutputE 20 422 1142 262 16 0
+// Parsing NO_SOLUTIONS// Warning: STRINGFROMID, declared as global variable(s). If symbolic variables are required, declare them as local and run purge// compiling NO_SOLUTIONS// Parsing simplex// Success// compiling simplex// Parsing simplex_core// Success// compiling simplex_core// Parsing sol// Success// compiling sol// Parsing minRatio// Success// compiling minRatio// Parsing simplex_int// Success// compiling simplex_int// Parsing basis_to_id// Success// compiling basis_to_id// Parsing id_to_basis// Success// compiling id_to_basis// Parsing istart// Success// compiling istart// Parsing addcol1// Success// compiling addcol1// Parsing pivot1// Success// compiling pivot1// Warning: column,art, declared as global variable(s). If symbolic variables are required, declare them as local and run purge// Parsing artrow// Warning: k, declared as global variable(s). If symbolic variables are required, declare them as local and run purge// compiling artrow// Parsing addartrow// Success// compiling addartrowWarning, i is usually sqrt(-1), I'm using a symbolic variable instead but you should check your input
+,
+// fltk N4xcas8EquationE 20 684 1142 22 16 0 1
++infinity,-infinity,"Done","Done","Done","Done","Done","Done","Done","Done","Done","Done","Done","Done","Done"
+]
+,
+// fltk 7Fl_Tile 20 708 1142 644 16 0
+[
+// fltk N4xcas7EditeurE 20 708 1142 360 16 0
+6036 0  ,
+// accepts payoff matrix p for a 2-person zero sum game
+// returns [v,x,y]
+// v is value of the game
+// a column of (x/y) is a strategy for (P1/P2)
+// for a given strategy (x_i/y_i) is the probabilitiy (P1/P2) should play (s_i/t_j)
+solveGame(p):=
+begin
+local (d:=dim(p)),(r:=pureCheck(p)),(l:=-not(istart()));
+// step 1: check for pure strategies
+if dim(r[2+l])!=1 then return r end;
+
+// no pure strategy
+// step 2: find mixed strategies
+
+// use 2x2 shortcut if possible
+if d==[2,2] then return twobytwo(p) end;
+
+// if not, try to reduce to 2x2 using dominant strategies
+p:=dominance(p);
+if dim(p[1+l])==[2,2] then
+ // use 2x2 if reduced to 2x2
+ d:=twobytwo(p[1]);
+ // insert 0 for deleted rows and columns
+ d[2+l..3+l]:=insertZeros(col(d[2+l],1),col(d[3+l],1),p[2+l],p[3+l]);
+ d[2+l]:=transpose(d[2+l]);
+ d[3+l]:=transpose(d[3+l]);
+ return d;
+end;
+
+//TODO: use mx2 method if possible
+//TODO: use 2xn method if possible
+
+// otherwise, solve by simplex
+r:=simplex_game(p[1+l]);
+
+// insert 0 for deleted rows and columns
+if len(p[2+l])>0 or len(p[3+l])>0 then
+ r[2+l..3+l]:=insertZeros(col(r[2+l],1),col(r[3+l],1),p[2+l],p[3+l]);
+ r[2+l]:=transpose(r[2+l]);
+ r[3+l]:=transpose(r[3+l]);
+end;
+
+return r;
+end:;
+
+// solves 2 person zero sum game by simplex algorithm
+// assumes no pure strategy, no more reduction by dominance
+// returns [v,x,y]
+// v is value of the game
+// (x_i/y_j) the is probabilitiy (P1/P2) should play (s_i/t_j)
+simplex_game(p):=
+begin
+local (d:=dim(p)),(alpha:=abs(min(min(p)))),(l:=-not(istart())),v,x,y;
+
+//set up dual y' system
+if alpha then p:=p.+alpha end;
+p:=concat(p,identity(d[1+l]));
+p:=append(p,[op(concat(makelist(-1,1,d[2+l]),makelist(0,1,d[1+l])))]);
+p:=addcol1(p,concat(makelist(1,1,d[1+l]),0),d[2+l]+d[1+l]+1+l);
+
+p:=simplex(p);
+v:=1/-p[1+l];
+y:=redim(p[0+l],d[2+l]);
+x:=p[2+l][0+l][d[2+l]+1+l..d[2+l]+d[1+l]+l];
+y*=v;
+x*=v;
+if alpha then v-=alpha end;
+return [v,transpose(x),transpose(y)];
+end:;
+
+pureCheck(a):=
+begin
+local (d:=dim(a)),maxMinRow,minMaxCol,(u:=[1,-1]),I,J,K,(saddle:=[]),(x:=[]),(y:=[]),(l:=-not(istart()));
+if d==1 then
+ a:=[a];
+ d:=[1,1];
+end;
+maxMinRow:=col(a,0+l);
+minMaxCol:=a[1+l];
+for I from 1 to d[1+l] do maxMinRow[I+l]:=min(a[I+l]) end;
+u[1+l]:=max(maxMinRow);
+
+for I from 1 to d[2+l] do minMaxCol[I+l]:=max(col(a,I+l)) end;
+u[2+l]:=min(minMaxCol);
+
+if u[1+l]==u[2+l] then
+ for I from contains(maxMinRow,u[1+l]) to d[1+l] do
+  for J from contains(minMaxCol,u[2+l]) to d[2+l] do
+   if maxMinRow[I+l]==minMaxCol[J+l] then
+    if len(saddle)==0 then saddle:=[I,J];
+    else if len(saddle)==2 and len(saddle[1+l])==1 then saddle:=append([saddle],[I,J]) else saddle:=append(saddle,[I,J]) end;
+    end;
+   end;
+  end;
+ end;
+ if dim(dim(saddle))!=2 then saddle:=[saddle] end;
+ K:=col(saddle,1);
+ for I from 1 to len(K) do
+  J:=[op(makelist(0,1,d[1+l]))];
+  J[K[I+l]+l]:=1;
+  if not(contains(x,J)) then x:=append(x,J) end;
+ end;
+
+ K:=col(saddle,2+l);
+ for I from 1 to len(K) do
+  J:=[op(makelist(0,1,d[2+l]))];
+  J[K[I+l]+l]:=1;
+  if not(contains(y,J)) then y:=append(y,J) end;
+ end;
+
+// [value of the game, Pure strategy @ saddle points]
+ return [u[1+l],transpose(x),transpose(y)]
+end:;
+
+// No pure strategy
+return [u[1+l],u[2+l]];
+end:;
+
+twobytwo(m):=
+begin
+local a,b,c,(d:=dim(m)),(l:=-not(istart())),r,v;
+if d==[2,2] then
+ a:=m[1+l][1+l];
+ b:=m[1+l][2+l];
+ c:=m[2+l][1+l];
+ d:=m[2+l][2+l];
+ r:=a+d-b-c;
+ v:=(a*d-b*c)/r;
+ return [v,transpose([(d-c)/r,(a-b)/r]),transpose([(d-b)/r,(a-c)/r])];
+end;
+return [];
+end:;
+
+//helper for dominance
+checkRow(row1,row2):=
+begin
+local (n:=len(row1)),I,(l:=-not(istart()));
+for I from 1 to n do if row2[I+l]<row1[I+l] then return 0 end end;
+return 1;
+end:;
+
+// uses dominant strategies to reduce a payoff matrix to dim [2,2]
+// returns list of [m', [indices of deleted rows], [indices of deleted columns]]
+dominance(m):=
+begin
+local (a:=1),(d:=dim(m)),(drow:=[]),(dcol:=[]),I,J,(l:=-not(istart()));
+
+while m!=a and d!=[2,2] do
+ a:=m;
+ for I from 1 to d[1+l] do
+  for J from 1 to d[1+l] do
+   if I!=J and checkRow(m[I+l],m[J+l])>0 then
+    m:=delrows(m,I+l);
+    if len(drow)>0 then drow:=append(drow,I+len(drow)) else drow:=append(drow,I) end;
+    d[1+l]-=1;
+    I-=1;
+    break;
+    end;
+  end;
+ end;
+
+ for I from 1 to d[2+l] do
+  for J from 1 to d[2+l] do
+   if I!=J and checkRow(col(m,J+l),col(m,I+l))>0 then
+    m:=delcols(m,I+l);
+    if len(dcol)>0 then dcol:=append(dcol,I+len(dcol)) else dcol:=append(dcol,I) end;
+    d[2+l]-=1;
+    I-=1;
+    break;
+    end;
+  end;
+ end;
+
+end;
+return [m,drow,dcol];
+end:;
+
+// inserts zeros into x for deleted rows and into y for deleted columns
+// returns [x',y']
+insertZeros(x,y,drow,dcol):=
+begin
+local (l:=-not(istart())),(I:=0);
+for I from 1 to len(drow) do
+  if drow[I+l] < len(x) then x:=prepend(x,0); continue; end;
+  if drow[I+l] > len(x) then x:=append(x,0); continue; end;
+  x:=concat(x[1+l..drow[I+l]-1+l],0,x[drow[I+l]+l..len(x)+l]);
+end;
+
+for I from 1 to len(dcol) do
+  if dcol[I+l] < len(y) then y:=prepend(y,0); continue; end;
+  if dcol[I+l] > len(y) then y:=append(y,0); continue; end;
+  y:=concat(y[1+l..dcol[I+l]-1+l],0,y[dcol[I+l]+l..len(y)+l]);
+end;
+
+return [x,y];
+end:;
+
+// accepts payoff matrix and probabilities X0,Y0
+// (X0/Y0) may be empty list or matrix of (X/Y)
+// a column of (X/Y) is a potential strategy
+// returns bounds for [v1,v2] for given (X_i/Y_i)
+verifySecurityLevels(m,x,y):=
+begin
+local d,(d1:=dim(m)),(n:=[]),(v:=[-1,1]),(l:=-not(istart())),(I:=0);
+
+if x!=[] then
+ d:=dim(x);
+ if dim(d)!=2 then
+  x:=transpose(x);
+  d:=[d,1];
+ end;
+ if d[1+l]<d1[1+l] then
+  x:=transpose(x);
+  d:=[d[2+l],d[1+l]];
+ end;
+ for I from 1 to d[2+l] do n:=append(n,min(col(x,I+l)*m)) end;
+else v[1+l]:=0 end;
+
+if v[1+l] then v[1+l]:=max(n) else v[1+l]:=[] end;
+
+n:=[];
+if y!=[] then
+ d:=dim(y);
+ if dim(d)!=2 then
+  y:=transpose(y);
+  d:=[d,1];
+ end;
+ if d[1+l]<d1[2+l] then
+  y:=transpose(y);
+  d:=[d[2+l],d[1+l]];
+ end;
+ for I from 1 to d[2+l] do n:=append(n,max(m*col(y,I+l))) end;
+else v[2+l]:=0 end;
+
+if v[2+l] then v[2+l]:=min(n) else v[2+l]:=[] end;
+
+return [v[1+l],v[2+l]];
+end:;,
+// fltk N4xcas10Log_OutputE 20 1068 1142 262 16 0
+// Parsing solveGame// Success// compiling solveGame// Parsing simplex_game// Success// compiling simplex_game// Parsing pureCheck// Success// compiling pureCheck// Parsing twobytwo// Success// compiling twobytwo// Parsing checkRow// Success// compiling checkRow// Parsing dominance// Success// compiling dominance// Parsing insertZeros// Success// compiling insertZeros// Parsing verifySecurityLevels// Success// compiling verifySecurityLevels
+,
+// fltk N4xcas8EquationE 20 1330 1142 22 16 0 1
+"Done","Done","Done","Done","Done","Done","Done","Done"
+]
+,
+// fltk 7Fl_Tile 20 1354 1142 644 16 0
+[
+// fltk N4xcas7EditeurE 20 1354 1142 360 16 0
+8619 0  ,
+test_simplex():=
+begin
+return [test01(),test02(),test03(),test04(),test05(),test06(),test07(),test08(),test09(),test10(),test11(),test12(),test13(),test14(),test15(),test16(),test17()];
+end:;
+
+//test00():= simplex.hpprgm compiled successfully
+
+// Example 3.7.2
+//       x1 +2x3      + x4 = 20
+//      2x1 + x2 + x3      = 10
+//      -x1 +4x2 -2x3 +3x4 = 40
+// min   x1 +4x2 +3x3 +2x4 = z
+//       x1,  x2,  x3,  x4 â‰¥ 0
+test01():=
+begin
+local expected,result;
+expected:=[35,[[1,1/2,1/2,0,3/4,0,-1/4,5],[0,0,0,0,-3/2,1,1/2,0],[0,3/2,-1/2,1,1/4,0,1/4,15],[0,1/2,7/2,0,-5/4,0,-1/4,-35]],[1,6,4],3,[[5],[0],[0],[15],[0],[0],[0]]];
+result:=simplex([[1,2,0,1,20],[2,1,1,0,10],[-1,4,-2,3,40],[1,4,3,2,0]],-3);
+return sum(abs(expected - result)) == 0;
+end:;
+
+// -slack variables, artificial variables
+//      2x +4y â‰¥ 22
+//      3x +2y â‰¥ 20
+//      4x +5y â‰¥ 40
+// min  6x +5y = z
+//       x,  y â‰¥ 0
+test02():=
+begin
+local expected,result;
+expected:=[320/7,[[0,1,0,4/7,-3/7,0,-4/7,3/7,40/7],[1,0,0,-5/7,2/7,0,5/7,-2/7,20/7],[0,0,1,6/7,-8/7,-1,-6/7,8/7,46/7],[0,0,0,10/7,3/7,0,-10/7,-3/7,-320/7]],[2,1,3],3,[[20/7],[40/7],[46/7],[0],[0],[0],[0],[0]]];
+result:=simplex([[2,4,22],[3,2,20],[4,5,40],[6,5,0]],[lpmin,3]);
+return sum(abs(expected - result)) == 0;
+end:;
+
+// slack varaibles
+//     -2x -4y â‰¤-22
+//     -3x -2y â‰¤-20
+//     -4x -5y â‰¤-40
+// min  6x +5y = z
+//       x,  y â‰¥ 0
+test03():=
+begin
+local expected,result;
+expected:=[320/7,[[0,0,1,6/7,-8/7,46/7],[1,0,0,-5/7,2/7,20/7],[0,1,0,4/7,-3/7,40/7],[0,0,0,10/7,3/7,-320/7]],[3,1,2],2,[[20/7],[40/7],[46/7],[0],[0]]];
+result:=simplex([[-2,-4,-22],[-3,-2,-20],[-4,-5,-40],[6,5,0]]);
+return sum(abs(expected - result)) == 0;
+end:;
+
+//      3x +2y + z = 10
+//      2x +5y +3z = 15
+// min -2x -3y -4z = Z
+//       x,  y,  z â‰¥ 0
+test04():=
+begin
+local expected,result;
+expected:=[-130/7,[[1,1/7,0,3/7,-1/7,15/7],[0,11/7,1,-2/7,3/7,25/7],[0,25/7,0,-2/7,10/7,130/7]],[1,3],3,[[15/7],[0],[25/7],[0],[0]]];
+result:=simplex([[3,2,1,10],[2,5,3,15],[-2,-3,-4,0]],-2);
+return sum(abs(expected - result)) == 0;
+end:;
+
+// artificial variables, non zero offset
+//      4x1 - x2       +x4 - x5 + x6          = 6
+//     -7x1 +8x2 + x3                - x7     = 7
+//       x1 + x2      +4x4 -4x5               = 12
+// min -3x1 +2x2 + x3 - x4 + x5           +87 = z
+//       x1,  x2,  x3,  x4,  x5,  x6,  x7 â‰¥ 0
+test05():=
+begin
+local expected,result;
+expected:=[1441/17,[[1,0,1/17,0,0,32/85,-1/17,32/85,1/17,-8/85,131/85],[0,1,3/17,0,0,28/85,-3/17,28/85,3/17,-7/85,189/85],[0,0,-1/17,1,-1,-3/17,1/17,-3/17,-1/17,5/17,35/17],[0,0,13/17,0,0,5/17,4/17,5/17,-4/17,3/17,-1441/17]],[1,2,4],3,[[131/85],[189/85],[0],[35/17],[0],[0],[0],[0],[0],[0]]];
+result:=simplex([[4,-1,0,1,-1,1,0,6],[-7,8,1,0,0,0,-1,7],[1,1,0,4,-4,0,0,12],[-3,2,1,-1,1,0,0,-87]],-3);
+return sum(abs(expected - result)) == 0;
+end:;
+
+// slack variables 'dual problem'
+//      2z1 + 3z2 + 4z3 â‰¤ 6
+//      4z1 + 2z2 + 5z3 â‰¤ 5
+// max 22z1 +20z2 +40z3 = c
+//       z1,z2,z3 â‰¥ 0
+test06():=
+begin
+local expected,result;
+expected:=[320/7,[[-6/7,1,0,5/7,-4/7,10/7],[8/7,0,1,-2/7,3/7,3/7],[46/7,0,0,20/7,40/7,320/7]],[2,3],2,[[0],[10/7],[3/7],[0],[0]]];
+result:=simplex([[2,3,4,6],[4,2,5,5],[22,20,40,0]],lpmax);
+return sum(abs(expected - result)) == 0;
+end:;
+
+// lpsolve(2x+5y,[3x-y=1,x-yâ‰¤5],assume=nonnegint)
+test07():=
+begin
+local expected,result;
+expected:=[12,[[1,0,0,-1,1,1],[0,0,1,-2,1,6],[0,1,0,-3,2,2],[0,0,0,17,-12,-12]],[1,3,2],2,[[1],[2],[6],[0],[0]]];
+result:=simplex([[3,-1,1],[1,-1,5],[2,5,0]],-1,[1,2]);
+return sum(abs(expected - result)) == 0;
+end:;
+
+// lpsolve(x+3y+3z,[x+3y+2zâ‰¤7,2x+2y+zâ‰¤11], assume=lp_nonnegative,lp_maximize, lp_integervariables=[x,z])
+test08():=
+begin
+local expected,result;
+expected:=[-10,[[0,1,1,0,0,1,3],[0,-1,0,-2,1,3,6],[1,1,0,1,0,-2,1],[0,1,0,1,0,1,10]],[3,5,1],3,[[1],[0],[3],[0],[6],[0]]];
+result:=simplex([[1,3,2,7],[2,2,1,11],[-1,-3,-3,0]],lpmin,[1,3]);
+return sum(abs(expected - result)) == 0;
+end:;
+
+// lpsolve(-5x-7y,[7x+yâ‰¤35,-x+3yâ‰¤6],assume=integer)
+test09():=
+begin
+local expected,result;
+expected:=[-41,[[1,0,0,0,0,0,0,0,0,0,-5/12,1/4,4],[0,1,0,0,0,0,0,0,0,0,1/3,0,3],[0,0,0,0,0,0,1,0,0,0,-1/6,-1/2,1],[0,0,0,0,1,0,0,0,0,0,-1,0,1],[0,0,0,0,0,1,0,0,0,0,-7/12,-1/4,1],[0,0,1,0,0,0,0,0,0,0,31/12,-7/4,4],[0,0,0,0,0,0,0,1,0,0,9/4,-7/4,3],[0,0,0,0,0,0,0,0,1,0,2/3,-1,1],[0,0,0,1,0,0,0,0,0,0,-17/12,1/4,1],[0,0,0,0,0,0,0,0,0,1,5/12,-5/4,1],[0,0,0,0,0,0,0,0,0,0,1/4,5/4,41]],[1,2,7,5,6,3,8,9,4,10],11,[[4],[3],[4],[1],[1],[1],[1],[3],[1],[1],[0],[0]]];
+result:=simplex([[7,1,35],[-1,3,6],[-5,-7,0]],lpmin,[1,2]);
+return sum(abs(expected - result)) == 0;
+end:;
+
+//      x1+x2â‰¤6
+// max 3x1+2x2=z
+//      x1,x2â‰¥0 and integer
+test10():=
+begin
+local expected,result;
+expected:=[18,[[1,1,1,6],[0,1,3,18]],[1],1,[[6],[0],[0]]];
+result:=simplex([[1,1,6],[3,2,0]],lpmax,[1,2]);
+return sum(abs(expected - result)) == 0;
+end:;
+
+//     2x1+ 9x2 â‰¤ 6
+//    11x1- 8x2 â‰¤ 82
+// max 3x1+13x2 = z
+//       x1, x2 â‰¥0 and integer
+test11():=
+begin
+local expected,result;
+expected:=[58,[[0,1,1,0,0,0,0,0,0,0,0,-1,4],[1,0,-4,0,0,0,0,0,0,0,0,9/2,2],[0,0,52,1,0,0,0,0,0,0,0,-115/2,92],[0,0,51,0,1,0,0,0,0,0,0,-113/2,90],[0,0,50,0,0,1,0,0,0,0,0,-111/2,88],[0,0,48,0,0,0,1,0,0,0,0,-107/2,84],[0,0,46,0,0,0,0,1,0,0,0,-103/2,80],[0,0,4,0,0,0,0,0,1,0,0,-9/2,6],[0,0,3,0,0,0,0,0,0,1,0,-7/2,4],[0,0,2,0,0,0,0,0,0,0,1,-5/2,2],[0,0,1,0,0,0,0,0,0,0,0,1/2,58]],[2,1,4,5,6,7,8,9,10,11],10,[[2],[4],[0],[92],[90],[88],[84],[80],[6],[4],[2],[0]]];
+result:=simplex([[2,9,40],[11,-8,82],[3,13,0]],lpmax,[1,2]);
+return sum(abs(expected - result)) == 0;
+end:;
+
+//6.3 2c
+test12():=
+begin
+local expected,result;
+expected:=[33,[[1,-1,0,1,0,0,12],[0,0,1,0,0,1,9],[0,2,0,0,1,-3,1],[0,2,0,2,0,1,33]],[1,3,5],3,[[12],[0],[9],[0],[1],[0]]];
+result:=simplex([[1,-1,0,12],[0,2,3,28],[2,-4,1,0]],lpmax,[1,2,3]);
+return sum(abs(expected - result)) == 0;
+end:;
+
+//6.3 2d
+test13():=
+begin
+local expected,result;
+expected:=[28,[[1,0,0,0,-3,1,2,14],[0,0,1,0,2,0,-1,8],[0,1,0,0,-3,0,2,2],[0,0,0,1,-2,0,1,1],[0,0,0,0,8,2,-5,28]],[1,3,2,4],4,[[14],[2],[8],[1],[0],[0],[0]]];
+result:=simplex([[1,-1,0,12],[0,2,3,28],[2,-4,1,0]],2,[1,2,3]);
+return sum(abs(expected - result)) == 0;
+end:;
+
+// -slack variables
+//      2x +4y â‰¥ 22
+//      3x +2y â‰¥ 20
+//      4x +5y â‰¥ 40
+// min  6x +5y = z
+//       x,  y â‰¥ 0 and integer
+test14():=
+begin
+local expected,result;
+expected:=[47,[[0,0,1,2,0,-4,10],[1,0,0,-1,0,1,2],[0,1,0,1,0,-3/2,7],[0,0,0,1,1,-7/2,3],[0,0,0,1,0,3/2,-47]],[3,1,2,5],3,[[2],[7],[10],[0],[3],[0]]];
+result:=simplex([-[2,4,22],-[3,2,20],-[4,5,40],[6,5,0]],lpmin,[1,2]);
+return sum(abs(expected - result)) == 0;
+end:;
+
+// https://www.youtube.com/watch?v=q3gy3bKc1aA&list=PLD3fYc0bAjC_iCOOsHZkxosZFDbcA7Kwf&index=11
+// TODO: does simplex_int really need to delcols here?
+test15():=
+begin
+local expected,result;
+expected:=[53,[[1,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,1],[0,0,0,0,0,0,1,0,0,0,0,0,-37/8,13/8,-3/4,0,0,-15/8,41/8,49/4],[0,0,0,0,0,0,0,1,0,0,0,0,-2,-3,-1,0,0,-2,1,13],[0,0,0,0,0,0,0,0,1,0,0,0,43/8,-59/8,5/4,0,0,-15/8,-55/8,69/4],[0,0,0,0,0,1,0,0,0,0,0,0,-11/8,11/8,3/4,0,0,-9/8,7/8,3/4],[0,0,0,1,0,0,0,0,0,0,0,0,-1,0,-1,0,0,0,1,0],[0,0,0,0,0,0,0,0,0,0,0,1,3/8,-11/8,1/4,0,0,1/8,-7/8,1/4],[0,0,0,0,0,0,0,0,0,0,1,0,-3/8,11/8,3/4,0,0,-1/8,7/8,3/4],[0,0,0,0,1,0,0,0,0,0,0,0,11/8,-11/8,1/4,0,0,1/8,-15/8,1/4],[0,0,1,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,1],[0,0,0,0,0,0,0,0,0,0,0,0,1,0,1,1,0,0,-1,1],[0,0,0,0,0,0,0,0,0,0,0,0,-11/8,11/8,-1/4,0,1,-1/8,15/8,3/4],[0,0,0,0,0,0,0,0,0,1,0,0,1,-1,0,0,0,0,0,0],[0,1,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,1],[0,0,0,0,0,0,0,0,0,0,0,0,3/2,3/2,0,0,0,3/2,5/2,53]],[1,7,8,9,6,4,12,11,5,3,16,17,10,2],10,[[1],[1],[0],[1],[0],[0],[13],[14],[16],[0],[0],[0],[0],[0],[1],[0],[1],[0],[0]]];
+result:=simplex([[5,11,13,16,9,32],[7,19,20,23,15,62],[9,25,26,29,16,77],[9,28,30,35,15,88],[-1,1,0,0,0,0],[0,0,0,1,1,1],[0,0,-1,-1,-1,-1],[10,18,22,25,12,0]],lpmax,[],[1,2,3,4,5]);
+return sum(abs(expected - result)) == 0;
+end:;
+
+// Example 9.6.1
+test16():=
+begin
+local expected,result;
+expected:=[0,[[1/4],[1/2],[1/4]],[[1/4],[1/2],[1/4]]];
+result:=solveGame([[0,1,-2],[-1,0,1],[2,-1,0]]);
+return sum(abs(expected - result)) == 0;
+end:;
+
+// Appendix B: An example of cycling
+test17():=
+begin
+local expected,result;
+expected:=[-5/4,[[0,2,1,1,-24,0,6,0,2,1,1],[0,0,1,0,0,1,0,0,0,1,1],[1,-1/2,3/4,0,-2,0,15/2,1,-1/2,3/4,3/4],[0,3/2,5/4,0,2,0,21/2,0,3/2,5/4,5/4]],[4,6,1],13,[[3/4],[0],[0],[1],[0],[1],[0],[0],[0],[0]]];
+result:=simplex([[1,0,0,1/4,-8,-1,9,0],[0,1,0,1/2,-12,-1/2,3,0],[0,0,1,0,0,1,0,1],[0,0,0,-3/4,20,-1/2,6,0]],-3);
+return sum(abs(expected - result)) == 0;
+end:;,
+// fltk N4xcas10Log_OutputE 20 1714 1142 262 16 0
+// Parsing test_simplex// Success// compiling test_simplex// Parsing test01// Success// compiling test01// Parsing test02// Warning: lpmin, declared as global variable(s). If symbolic variables are required, declare them as local and run purge// compiling test02// Parsing test03// Success// compiling test03// Parsing test04// Success// compiling test04// Parsing test05// Success// compiling test05// Parsing test06// Warning: lpmax, declared as global variable(s). If symbolic variables are required, declare them as local and run purge// compiling test06// Parsing test07// Success// compiling test07// Parsing test08// Warning: lpmin, declared as global variable(s). If symbolic variables are required, declare them as local and run purge// compiling test08// Parsing test09// Warning: lpmin, declared as global variable(s). If symbolic variables are required, declare them as local and run purge// compiling test09// Parsing test10// Warning: lpmax, declared as global variable(s). If symbolic variables are required, declare them as local and run purge// compiling test10// Parsing test11// Warning: lpmax, declared as global variable(s). If symbolic variables are required, declare them as local and run purge// compiling test11// Parsing test12// Warning: lpmax, declared as global variable(s). If symbolic variables are required, declare them as local and run purge// compiling test12// Parsing test13// Success// compiling test13// Parsing test14// Warning: lpmin, declared as global variable(s). If symbolic variables are required, declare them as local and run purge// compiling test14// Parsing test15// Warning: lpmax, declared as global variable(s). If symbolic variables are required, declare them as local and run purge// compiling test15// Parsing test16// Success// compiling test16// Parsing test17// Success// compiling test17
+,
+// fltk N4xcas8EquationE 20 1976 1142 22 16 0 1
+"Done","Done","Done","Done","Done","Done","Done","Done","Done","Done","Done","Done","Done","Done","Done","Done","Done","Done"
+]
+,
+// fltk 7Fl_Tile 20 2000 1142 245 16 0
+[
+// fltk N4xcas16Xcas_Text_EditorE 20 2000 1142 30 16 0
+66 0 ,
+simplex([[1,2,0,1,20],[2,1,1,0,10],[-1,4,-2,3,40],[1,4,3,2,0]],-3),
+// fltk N4xcas10Log_OutputE 20 2030 1142 1 16 0
+
+,
+// fltk N4xcas8EquationE 20 2031 1142 214 16 0 1
+[35,[[1,1/2,1/2,0,3/4,0,-1/4,5],[0,0,0,0,-3/2,1,1/2,0],[0,3/2,-1/2,1,1/4,0,1/4,15],[0,1/2,7/2,0,-5/4,0,-1/4,-35]],[1,6,4],3,[[5],[0],[0],[15],[0],[0],[0]]]
+]
+,
+// fltk 7Fl_Tile 20 2247 1142 337 16 0
+[
+// fltk N4xcas16Xcas_Text_EditorE 20 2247 1142 30 16 0
+55 0 ,
+simplex([[2,4,22],[3,2,20],[4,5,40],[6,5,0]],[lpmin,3]),
+// fltk N4xcas10Log_OutputE 20 2277 1142 1 16 0
+
+,
+// fltk N4xcas8EquationE 20 2278 1142 306 16 0 1
+[320/7,[[0,1,0,4/7,-3/7,0,-4/7,3/7,40/7],[1,0,0,-5/7,2/7,0,5/7,-2/7,20/7],[0,0,1,6/7,-8/7,-1,-6/7,8/7,46/7],[0,0,0,10/7,3/7,0,-10/7,-3/7,-320/7]],[2,1,3],3,[[20/7],[40/7],[46/7],[0],[0],[0],[0],[0]]]
+]
+,
+// fltk 7Fl_Tile 20 2586 1142 221 16 0
+[
+// fltk N4xcas16Xcas_Text_EditorE 20 2586 1142 30 16 0
+48 0 ,
+simplex([[3,2,1,10],[2,5,3,15],[-2,-3,-4,0]],-2),
+// fltk N4xcas10Log_OutputE 20 2616 1142 1 16 0
+
+,
+// fltk N4xcas8EquationE 20 2617 1142 190 16 0 1
+[-130/7,[[1,1/7,0,3/7,-1/7,15/7],[0,11/7,1,-2/7,3/7,25/7],[0,25/7,0,-2/7,10/7,130/7]],[1,3],3,[[15/7],[0],[25/7],[0],[0]]]
+]
+,
+// fltk 7Fl_Tile 20 2809 1142 401 16 0
+[
+// fltk N4xcas16Xcas_Text_EditorE 20 2809 1142 30 16 0
+95 0 ,
+simplex([[4,-1,0,1,-1,1,0,6],[-7,8,1,0,0,0,-1,7],[1,1,0,4,-4,0,0,12],[-3,2,1,-1,1,0,0,-87]],-3),
+// fltk N4xcas10Log_OutputE 20 2839 1142 1 16 0
+
+,
+// fltk N4xcas8EquationE 20 2840 1142 370 16 0 1
+[1441/17,[[1,0,1/17,0,0,32/85,-1/17,32/85,1/17,-8/85,131/85],[0,1,3/17,0,0,28/85,-3/17,28/85,3/17,-7/85,189/85],[0,0,-1/17,1,-1,-3/17,1/17,-3/17,-1/17,5/17,35/17],[0,0,13/17,0,0,5/17,4/17,5/17,-4/17,3/17,-1441/17]],[1,2,4],3,[[131/85],[189/85],[0],[35/17],[0],[0],[0],[0],[0],[0]]]
+]
+,
+// fltk 7Fl_Tile 20 3212 1142 221 16 0
+[
+// fltk N4xcas16Xcas_Text_EditorE 20 3212 1142 30 16 0
+49 0 ,
+simplex([[2,3,4,6],[4,2,5,5],[22,20,40,0]],lpmax),
+// fltk N4xcas10Log_OutputE 20 3242 1142 1 16 0
+
+,
+// fltk N4xcas8EquationE 20 3243 1142 190 16 0 1
+[320/7,[[-6/7,1,0,5/7,-4/7,10/7],[8/7,0,1,-2/7,3/7,3/7],[46/7,0,0,20/7,40/7,320/7]],[2,3],2,[[0],[10/7],[3/7],[0],[0]]]
+]
+,
+// fltk 7Fl_Tile 20 3435 1142 181 16 0
+[
+// fltk N4xcas16Xcas_Text_EditorE 20 3435 1142 30 16 0
+45 0 ,
+simplex([[3,-1,1],[1,-1,5],[2,5,0]],-1,[1,2]),
+// fltk N4xcas10Log_OutputE 20 3465 1142 1 16 0
+
+,
+// fltk N4xcas8EquationE 20 3466 1142 150 16 0 1
+[12,[[1,0,0,-1,1,1],[0,0,1,-2,1,6],[0,1,0,-3,2,2],[0,0,0,17,-12,-12]],[1,3,2],2,[[1],[2],[6],[0],[0]]]
+]
+,
+// fltk 7Fl_Tile 20 3618 1142 213 16 0
+[
+// fltk N4xcas16Xcas_Text_EditorE 20 3618 1142 30 16 0
+56 0 ,
+simplex([[1,3,2,7],[2,2,1,11],[-1,-3,-3,0]],lpmin,[1,3]),
+// fltk N4xcas10Log_OutputE 20 3648 1142 1 16 0
+
+,
+// fltk N4xcas8EquationE 20 3649 1142 182 16 0 1
+[-10,[[0,1,1,0,0,1,3],[0,-1,0,-2,1,3,6],[1,1,0,1,0,-2,1],[0,1,0,1,0,1,10]],[3,5,1],3,[[1],[0],[3],[0],[6],[0]]]
+]
+,
+// fltk 7Fl_Tile 20 3833 1142 456 16 0
+[
+// fltk N4xcas16Xcas_Text_EditorE 20 3833 1142 30 16 0
+50 0 ,
+simplex([[7,1,35],[-1,3,6],[-5,-7,0]],lpmin,[1,2]),
+// fltk N4xcas10Log_OutputE 20 3863 1142 1 16 0
+
+,
+// fltk N4xcas8EquationE 20 3864 1142 425 16 0 1
+[-41,[[1,0,0,0,0,0,0,0,0,0,-5/12,1/4,4],[0,1,0,0,0,0,0,0,0,0,1/3,0,3],[0,0,0,0,0,0,1,0,0,0,-1/6,-1/2,1],[0,0,0,0,1,0,0,0,0,0,-1,0,1],[0,0,0,0,0,1,0,0,0,0,-7/12,-1/4,1],[0,0,1,0,0,0,0,0,0,0,31/12,-7/4,4],[0,0,0,0,0,0,0,1,0,0,9/4,-7/4,3],[0,0,0,0,0,0,0,0,1,0,2/3,-1,1],[0,0,0,1,0,0,0,0,0,0,-17/12,1/4,1],[0,0,0,0,0,0,0,0,0,1,5/12,-5/4,1],[0,0,0,0,0,0,0,0,0,0,1/4,5/4,41]],[1,2,7,5,6,3,8,9,4,10],11,[[4],[3],[4],[1],[1],[1],[1],[3],[1],[1],[0],[0]]]
+]
+,
+// fltk 7Fl_Tile 20 4291 1142 117 16 0
+[
+// fltk N4xcas16Xcas_Text_EditorE 20 4291 1142 30 16 0
+38 0 ,
+simplex([[1,1,6],[3,2,0]],lpmax,[1,2]),
+// fltk N4xcas10Log_OutputE 20 4321 1142 1 16 0
+
+,
+// fltk N4xcas8EquationE 20 4322 1142 86 16 0 1
+[18,[[1,1,1,6],[0,1,3,18]],[1],1,[[6],[0],[0]]]
+]
+,
+// fltk 7Fl_Tile 20 4410 1142 456 16 0
+[
+// fltk N4xcas16Xcas_Text_EditorE 20 4410 1142 30 16 0
+51 0 ,
+simplex([[2,9,40],[11,-8,82],[3,13,0]],lpmax,[1,2]),
+// fltk N4xcas10Log_OutputE 20 4440 1142 1 16 0
+
+,
+// fltk N4xcas8EquationE 20 4441 1142 425 16 0 1
+[58,[[0,1,1,0,0,0,0,0,0,0,0,-1,4],[1,0,-4,0,0,0,0,0,0,0,0,9/2,2],[0,0,52,1,0,0,0,0,0,0,0,-115/2,92],[0,0,51,0,1,0,0,0,0,0,0,-113/2,90],[0,0,50,0,0,1,0,0,0,0,0,-111/2,88],[0,0,48,0,0,0,1,0,0,0,0,-107/2,84],[0,0,46,0,0,0,0,1,0,0,0,-103/2,80],[0,0,4,0,0,0,0,0,1,0,0,-9/2,6],[0,0,3,0,0,0,0,0,0,1,0,-7/2,4],[0,0,2,0,0,0,0,0,0,0,1,-5/2,2],[0,0,1,0,0,0,0,0,0,0,0,1/2,58]],[2,1,4,5,6,7,8,9,10,11],10,[[2],[4],[0],[92],[90],[88],[84],[80],[6],[4],[2],[0]]]
+]
+,
+// fltk 7Fl_Tile 20 4868 1142 213 16 0
+[
+// fltk N4xcas16Xcas_Text_EditorE 20 4868 1142 30 16 0
+58 0 ,
+simplex([[1,-1,0,12],[0,2,3,28],[2,-4,1,0]],lpmax,[1,2,3]),
+// fltk N4xcas10Log_OutputE 20 4898 1142 1 16 0
+
+,
+// fltk N4xcas8EquationE 20 4899 1142 182 16 0 1
+[33,[[1,-1,0,1,0,0,12],[0,0,1,0,0,1,9],[0,2,0,0,1,-3,1],[0,2,0,2,0,1,33]],[1,3,5],3,[[12],[0],[9],[0],[1],[0]]]
+]
+,
+// fltk 7Fl_Tile 20 5083 1142 245 16 0
+[
+// fltk N4xcas16Xcas_Text_EditorE 20 5083 1142 30 16 0
+54 0 ,
+simplex([[1,-1,0,12],[0,2,3,28],[2,-4,1,0]],2,[1,2,3]),
+// fltk N4xcas10Log_OutputE 20 5113 1142 1 16 0
+
+,
+// fltk N4xcas8EquationE 20 5114 1142 214 16 0 1
+[28,[[1,0,0,0,-3,1,2,14],[0,0,1,0,2,0,-1,8],[0,1,0,0,-3,0,2,2],[0,0,0,1,-2,0,1,1],[0,0,0,0,8,2,-5,28]],[1,3,2,4],4,[[14],[2],[8],[1],[0],[0],[0]]]
+]
+,
+// fltk 7Fl_Tile 20 5330 1142 241 16 0
+[
+// fltk N4xcas16Xcas_Text_EditorE 20 5330 1142 30 16 0
+60 0 ,
+simplex([-[2,4,22],-[3,2,20],-[4,5,40],[6,5,0]],lpmin,[1,2]),
+// fltk N4xcas10Log_OutputE 20 5360 1142 1 16 0
+
+,
+// fltk N4xcas8EquationE 20 5361 1142 210 16 0 1
+[47,[[0,0,1,2,0,-4,10],[1,0,0,-1,0,1,2],[0,1,0,1,0,-3/2,7],[0,0,0,1,1,-7/2,3],[0,0,0,1,0,3/2,-47]],[3,1,2,5],3,[[2],[7],[10],[0],[3],[0]]]
+]
+,
+// fltk 7Fl_Tile 20 5573 1142 475 16 0
+[
+// fltk N4xcas16Xcas_Text_EditorE 20 5573 1142 41 16 0
+172 0 ,
+simplex([[5,11,13,16,9,32],[7,19,20,23,15,62],[9,25,26,29,16,77],[9,28,30,35,15,88],[-1,1,0,0,0,0],[0,0,0,1,1,1],[0,0,-1,-1,-1,-1],[10,18,22,25,12,0]],lpmax,[],[1,2,3,4,5]),
+// fltk N4xcas10Log_OutputE 20 5614 1142 1 16 0
+
+,
+// fltk N4xcas8EquationE 20 5615 1142 433 16 0 1
+[53,[[1,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,1],[0,0,0,0,0,0,1,0,0,0,0,0,-37/8,13/8,-3/4,0,0,-15/8,41/8,49/4],[0,0,0,0,0,0,0,1,0,0,0,0,-2,-3,-1,0,0,-2,1,13],[0,0,0,0,0,0,0,0,1,0,0,0,43/8,-59/8,5/4,0,0,-15/8,-55/8,69/4],[0,0,0,0,0,1,0,0,0,0,0,0,-11/8,11/8,3/4,0,0,-9/8,7/8,3/4],[0,0,0,1,0,0,0,0,0,0,0,0,-1,0,-1,0,0,0,1,0],[0,0,0,0,0,0,0,0,0,0,0,1,3/8,-11/8,1/4,0,0,1/8,-7/8,1/4],[0,0,0,0,0,0,0,0,0,0,1,0,-3/8,11/8,3/4,0,0,-1/8,7/8,3/4],[0,0,0,0,1,0,0,0,0,0,0,0,11/8,-11/8,1/4,0,0,1/8,-15/8,1/4],[0,0,1,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,1],[0,0,0,0,0,0,0,0,0,0,0,0,1,0,1,1,0,0,-1,1],[0,0,0,0,0,0,0,0,0,0,0,0,-11/8,11/8,-1/4,0,1,-1/8,15/8,3/4],[0,0,0,0,0,0,0,0,0,1,0,0,1,-1,0,0,0,0,0,0],[0,1,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,1],[0,0,0,0,0,0,0,0,0,0,0,0,3/2,3/2,0,0,0,3/2,5/2,53]],[1,7,8,9,6,4,12,11,5,3,16,17,10,2],10,[[1],[1],[0],[1],[0],[0],[13],[14],[16],[0],[0],[0],[0],[0],[1],[0],[1],[0],[0]]]
+]
+,
+// fltk 7Fl_Tile 20 6050 1142 177 16 0
+[
+// fltk N4xcas16Xcas_Text_EditorE 20 6050 1142 30 16 0
+39 0 ,
+solveGame([[0,1,-2],[-1,0,1],[2,-1,0]]),
+// fltk N4xcas10Log_OutputE 20 6080 1142 1 16 0
+
+,
+// fltk N4xcas8EquationE 20 6081 1142 146 16 0 1
+[0,[[1/4],[1/2],[1/4]],[[1/4],[1/2],[1/4]]]
+]
+,
+// fltk 7Fl_Tile 20 6229 1142 361 16 0
+[
+// fltk N4xcas16Xcas_Text_EditorE 20 6229 1142 30 16 0
+103 0 ,
+simplex([[1,0,0,1/4,-8,-1,9,0],[0,1,0,1/2,-12,-1/2,3,0],[0,0,1,0,0,1,0,1],[0,0,0,-3/4,20,-1/2,6,0]],-3),
+// fltk N4xcas10Log_OutputE 20 6259 1142 1 16 0
+
+,
+// fltk N4xcas8EquationE 20 6260 1142 330 16 0 1
+[-5/4,[[0,2,1,1,-24,0,6,0,2,1,1],[0,0,1,0,0,1,0,0,0,1,1],[1,-1/2,3/4,0,-2,0,15/2,1,-1/2,3/4,3/4],[0,3/2,5/4,0,2,0,21/2,0,3/2,5/4,5/4]],[4,6,1],13,[[3/4],[0],[0],[1],[0],[1],[0],[0],[0],[0]]]
+]
+,
+// fltk 7Fl_Tile 20 6592 1142 53 16 0
+[
+// fltk N4xcas16Xcas_Text_EditorE 20 6592 1142 30 16 0
+14 0 ,
+test_simplex(),
+// fltk N4xcas10Log_OutputE 20 6622 1142 1 16 0
+
+,
+// fltk N4xcas8EquationE 20 6623 1142 22 16 0 1
+[true,true,true,true,true,true,true,true,true,true,true,true,true,true,true,true,true]
+]
+,
+// fltk 7Fl_Tile 20 6647 1142 31 16 0
+[
+// fltk N4xcas16Xcas_Text_EditorE 20 6647 1142 30 16 0
+0 0 ,
+,
+// fltk N4xcas10Log_OutputE 20 6677 1142 1 16 0
+
+]
+// context 59620 giac archive
+7 0 46 8 0 0 'cas_setup' 7 0 12 0 0 0
+0 0 0
+0 0 0
+0 1 0
+0 0 0
+7 0 2 1 ê-™—q=
+1 Vçž¯Ò<
+0 12 0
+7 0 4 0 1 0
+0 100 0
+0 0 0
+0 25 0
+0 0 0
+0 1 0
+0 0 0
+0 1 0
+8 0 0 'xyztrange' 7 0 16 1      $À
+1      $@
+1      $À
+1      $@
+1      $À
+1      $@
+1      $À
+1      $@
+1      $À
+1      $@
+1 afffffö¿
+1 ™™™™™ñ?
+0 1 0
+1        
+1      ð?
+0 3 0
+7 0 0 7 0 0 8 0 15 7 1 2 8 0 73 7 1 3 7 1 0 7 1 0 8 0 0 when 7 1 3 8 0 0 'contains' 7 1 2 8 0 0 'version' 7 1 0 12 8 |HP Prime 8 0 81 7 1 2 6 12 STRINGFROMID 12 31 |AppQuadE_LinearSolverNoSolution 12 12 |No solutions 6 12 NO_SOLUTIONS 8 0 15 7 1 2 8 0 73 7 1 3 7 1 2 6 1 a 6 3 art 7 1 2 0 0 0
+0 0 0
+8 0 42 7 1 2 7 0 2 7 1 5 8 0 15 7 1 2 8 0 0 'len' 8 0 81 7 1 2 6 1 a 0 1 0
+6 1 c 8 0 15 7 1 2 8 0 2 8 0 32 8 0 81 7 1 2 6 6 istart 7 1 0 6 1 l 8 0 15 7 1 2 0 0 0
+6 1 J 8 0 15 7 1 2 8 0 0 'copy' 7 0 0 6 4 lrow 8 0 15 7 1 2 0 0 0
+6 1 d 7 1 0 7 32 3 8 0 70 7 0 3 8 0 36 7 1 2 6 3 art 0 0 0
+8 0 43 6 1 a 0 0 0
+8 0 71 7 0 4 8 0 15 7 1 2 8 0 1 7 1 2 6 1 c 8 0 2 6 3 art 6 1 J 8 0 36 7 1 2 6 1 J 8 0 1 7 1 2 6 1 c 0 -1 0
+8 0 15 7 1 2 8 0 1 7 1 2 6 1 J 0 1 0
+6 1 J 8 0 70 7 0 3 8 0 15 7 1 2 8 0 0 'contains' 7 1 2 8 0 0 'col' 7 1 2 6 1 a 8 0 1 7 1 2 6 1 J 6 1 l 0 1 0
+6 1 d 8 0 75 7 1 2 6 4 lrow 8 0 82 7 1 2 6 1 a 8 0 1 7 1 2 6 1 d 6 1 l 0 0 0
+8 0 0 'append' 7 1 2 6 1 a 8 0 1 7 1 2 8 0 81 7 1 2 6 6 artrow 7 1 2 6 1 c 6 3 art 8 0 2 6 4 lrow 6 9 addartrow 8 0 15 7 1 2 8 0 73 7 1 3 7 1 3 6 1 m 6 1 c 6 3 ind 7 1 3 0 0 0
+0 0 0
+0 0 0
+8 0 0 'transpose' 8 0 0 'insert' 7 1 3 8 0 0 'transpose' 6 1 m 6 3 ind 6 1 c 6 7 addcol1 8 0 15 7 1 2 8 0 73 7 1 3 7 1 2 6 6 column 6 3 art 7 1 2 0 0 0
+0 0 0
+8 0 0 'append' 7 1 2 8 0 0 'makelist' 7 1 3 8 0 73 7 1 3 7 1 1 6 1 k 0 0 0
+8 0 37 7 1 2 6 1 k 8 0 1 7 1 2 6 6 column 8 0 2 6 3 art 0 2 0
+6 6 column 0 0 0
+6 6 artrow 8 0 15 7 1 2 8 0 73 7 1 3 7 1 2 6 5 Basis 6 1 n 7 1 2 0 0 0
+0 0 0
+8 0 42 7 1 2 7 0 2 7 1 4 8 0 15 7 1 2 0 0 0
+6 2 ID 8 0 15 7 1 2 8 0 0 'len' 6 5 Basis 6 1 l 8 0 15 7 1 2 8 0 2 8 0 32 8 0 81 7 1 2 6 6 istart 7 1 0 6 2 l1 8 0 15 7 1 2 0 0 0
+6 1 I 7 1 0 7 32 2 8 0 71 7 0 4 8 0 15 7 1 2 0 1 0
+6 1 I 8 0 36 7 1 2 6 1 I 6 1 l 8 0 15 7 1 2 8 0 1 7 1 2 6 1 I 0 1 0
+6 1 I 8 0 75 7 1 2 6 2 ID 8 0 0 'comb' 7 1 2 8 0 1 7 1 2 8 0 82 7 1 2 6 5 Basis 8 0 1 7 1 2 6 1 I 6 2 l1 0 -1 0
+6 1 I 8 0 43 6 2 ID 6 11 basis_to_id 8 0 15 7 1 2 8 0 73 7 1 3 7 1 2 6 4 row1 6 4 row2 7 1 2 0 0 0
+0 0 0
+8 0 42 7 1 2 7 0 2 7 1 3 8 0 15 7 1 2 8 0 0 'len' 6 4 row1 6 1 n 6 1 I 8 0 15 7 1 2 8 0 2 8 0 32 8 0 81 7 1 2 6 6 istart 7 1 0 6 1 l 7 1 0 7 32 2 8 0 71 7 0 4 8 0 15 7 1 2 0 1 0
+6 1 I 8 0 36 7 1 2 6 1 I 6 1 n 8 0 15 7 1 2 8 0 1 7 1 2 6 1 I 0 1 0
+6 1 I 8 0 70 7 0 3 8 0 35 7 1 2 8 0 82 7 1 2 6 4 row2 8 0 1 7 1 2 6 1 I 6 1 l 8 0 82 7 1 2 6 4 row1 8 0 1 7 1 2 6 1 I 6 1 l 8 0 43 0 0 0
+0 0 0
+8 0 43 0 1 0
+6 8 checkRow 8 0 15 7 1 2 8 0 73 7 1 3 7 1 1 6 1 m 7 1 1 0 0 0
+8 0 42 7 1 2 7 0 2 7 1 7 8 0 15 7 1 2 0 1 0
+6 1 a 8 0 15 7 1 2 8 0 0 'dim' 6 1 m 6 1 d 8 0 15 7 1 2 8 0 0 'copy' 7 0 0 6 4 drow 8 0 15 7 1 2 8 0 0 'copy' 7 0 0 6 4 dcol 6 1 I 6 1 J 8 0 15 7 1 2 8 0 2 8 0 32 8 0 81 7 1 2 6 6 istart 7 1 0 6 1 l 7 1 0 7 32 2 8 0 71 7 0 4 0 0 0
+8 0 33 7 1 2 8 0 39 7 1 2 6 1 m 6 1 a 8 0 39 7 1 2 6 1 d 7 0 2 0 2 0
+0 2 0
+0 0 0
+8 0 72 7 1 3 8 0 15 7 1 2 6 1 m 6 1 a 8 0 71 7 0 4 8 0 15 7 1 2 0 1 0
+6 1 I 8 0 36 7 1 2 6 1 I 8 0 82 7 1 2 6 1 d 8 0 1 7 1 2 0 1 0
+6 1 l 8 0 15 7 1 2 8 0 1 7 1 2 6 1 I 0 1 0
+6 1 I 8 0 71 7 0 4 8 0 15 7 1 2 0 1 0
+6 1 J 8 0 36 7 1 2 6 1 J 8 0 82 7 1 2 6 1 d 8 0 1 7 1 2 0 1 0
+6 1 l 8 0 15 7 1 2 8 0 1 7 1 2 6 1 J 0 1 0
+6 1 J 8 0 70 7 0 3 8 0 33 7 1 2 8 0 39 7 1 2 6 1 I 6 1 J 8 0 37 7 1 2 8 0 81 7 1 2 6 8 checkRow 7 1 2 8 0 82 7 1 2 6 1 m 8 0 1 7 1 2 6 1 I 6 1 l 8 0 82 7 1 2 6 1 m 8 0 1 7 1 2 6 1 J 6 1 l 0 0 0
+8 0 72 7 1 5 8 0 15 7 1 2 8 0 0 'delrows' 7 1 2 6 1 m 8 0 1 7 1 2 6 1 I 6 1 l 6 1 m 8 0 70 7 0 3 8 0 37 7 1 2 8 0 0 'len' 6 4 drow 0 0 0
+8 0 15 7 1 2 8 0 0 'append' 7 1 2 6 4 drow 8 0 1 7 1 2 6 1 I 8 0 0 'len' 6 4 drow 6 4 drow 8 0 15 7 1 2 8 0 0 'append' 7 1 2 6 4 drow 6 1 I 6 4 drow 8 0 76 7 1 2 8 0 82 7 1 2 6 1 d 8 0 1 7 1 2 0 1 0
+6 1 l 0 1 0
+8 0 76 7 1 2 6 1 I 0 1 0
+8 0 52 0 0 0
+0 0 0
+8 0 71 7 0 4 8 0 15 7 1 2 0 1 0
+6 1 I 8 0 36 7 1 2 6 1 I 8 0 82 7 1 2 6 1 d 8 0 1 7 1 2 0 2 0
+6 1 l 8 0 15 7 1 2 8 0 1 7 1 2 6 1 I 0 1 0
+6 1 I 8 0 71 7 0 4 8 0 15 7 1 2 0 1 0
+6 1 J 8 0 36 7 1 2 6 1 J 8 0 82 7 1 2 6 1 d 8 0 1 7 1 2 0 2 0
+6 1 l 8 0 15 7 1 2 8 0 1 7 1 2 6 1 J 0 1 0
+6 1 J 8 0 70 7 0 3 8 0 33 7 1 2 8 0 39 7 1 2 6 1 I 6 1 J 8 0 37 7 1 2 8 0 81 7 1 2 6 8 checkRow 7 1 2 8 0 0 'col' 7 1 2 6 1 m 8 0 1 7 1 2 6 1 J 6 1 l 8 0 0 'col' 7 1 2 6 1 m 8 0 1 7 1 2 6 1 I 6 1 l 0 0 0
+8 0 72 7 1 5 8 0 15 7 1 2 8 0 0 'delcols' 7 1 2 6 1 m 8 0 1 7 1 2 6 1 I 6 1 l 6 1 m 8 0 70 7 0 3 8 0 37 7 1 2 8 0 0 'len' 6 4 dcol 0 0 0
+8 0 15 7 1 2 8 0 0 'append' 7 1 2 6 4 dcol 8 0 1 7 1 2 6 1 I 8 0 0 'len' 6 4 dcol 6 4 dcol 8 0 15 7 1 2 8 0 0 'append' 7 1 2 6 4 dcol 6 1 I 6 4 dcol 8 0 76 7 1 2 8 0 82 7 1 2 6 1 d 8 0 1 7 1 2 0 2 0
+6 1 l 0 1 0
+8 0 76 7 1 2 6 1 I 0 1 0
+8 0 52 0 0 0
+0 0 0
+8 0 43 7 0 3 6 1 m 6 4 drow 6 4 dcol 6 9 dominance 8 0 15 7 1 2 8 0 73 7 1 3 7 1 3 6 2 ID 6 1 n 6 1 b 7 1 3 0 0 0
+0 0 0
+0 0 0
+8 0 42 7 1 2 7 0 2 7 1 6 8 0 15 7 1 2 8 0 0 'copy' 7 0 0 6 5 Basis 8 0 15 7 1 2 6 2 ID 6 1 x 8 0 15 7 1 2 0 -1 0
+6 5 start 8 0 15 7 1 2 8 0 4 7 1 2 0 2 0
+8 0 1 7 1 2 0 1 0
+8 0 2 8 0 0 'contains' 7 1 2 8 0 0 'version' 7 1 0 12 4 |giac 6 1 v 8 0 15 7 1 2 0 0 0
+6 1 I 8 0 15 7 1 2 0 0 0
+6 1 J 7 1 0 7 32 2 8 0 71 7 0 4 8 0 15 7 1 2 6 1 b 6 1 J 8 0 38 7 1 2 6 1 J 8 0 1 7 1 2 6 1 v 0 -1 0
+8 0 15 7 1 2 8 0 1 7 1 2 6 1 J 0 -1 0
+6 1 J 8 0 72 7 1 3 8 0 71 7 0 4 8 0 15 7 1 2 0 1 0
+6 1 I 8 0 36 7 1 2 6 1 I 8 0 1 7 1 3 6 1 n 0 1 0
+0 -1 0
+8 0 15 7 1 2 8 0 1 7 1 2 6 1 I 0 1 0
+6 1 I 8 0 70 7 0 3 8 0 36 7 1 2 8 0 0 'comb' 7 1 2 8 0 1 7 1 2 6 1 I 0 -1 0
+6 1 J 6 1 x 8 0 15 7 1 2 6 1 I 6 5 start 8 0 52 0 0 0
+8 0 15 7 1 2 8 0 0 'append' 7 1 2 6 5 Basis 6 5 start 6 5 Basis 8 0 76 7 1 2 6 1 x 8 0 0 'comb' 7 1 2 8 0 1 7 1 2 6 5 start 0 -1 0
+6 1 J 8 0 43 8 0 0 'reverse' 6 5 Basis 6 11 id_to_basis 8 0 15 7 1 2 8 0 73 7 1 3 7 1 4 6 1 x 6 1 y 6 4 drow 6 4 dcol 7 1 4 0 0 0
+0 0 0
+0 0 0
+0 0 0
+8 0 42 7 1 2 7 0 2 7 1 2 8 0 15 7 1 2 8 0 2 8 0 32 8 0 81 7 1 2 6 6 istart 7 1 0 6 1 l 8 0 15 7 1 2 0 0 0
+6 1 I 7 1 0 7 32 3 8 0 71 7 0 4 8 0 15 7 1 2 0 1 0
+6 1 I 8 0 36 7 1 2 6 1 I 8 0 0 'len' 6 4 drow 8 0 15 7 1 2 8 0 1 7 1 2 6 1 I 0 1 0
+6 1 I 8 0 72 7 1 3 8 0 70 7 0 3 8 0 35 7 1 2 8 0 82 7 1 2 6 4 drow 8 0 1 7 1 2 6 1 I 6 1 l 8 0 0 'len' 6 1 x 8 0 72 7 1 2 8 0 15 7 1 2 8 0 0 'prepend' 7 1 2 6 1 x 0 0 0
+6 1 x 8 0 53 0 0 0
+0 0 0
+8 0 70 7 0 3 8 0 37 7 1 2 8 0 82 7 1 2 6 4 drow 8 0 1 7 1 2 6 1 I 6 1 l 8 0 0 'len' 6 1 x 8 0 72 7 1 2 8 0 15 7 1 2 8 0 0 'append' 7 1 2 6 1 x 0 0 0
+6 1 x 8 0 53 0 0 0
+0 0 0
+8 0 15 7 1 2 8 0 0 'concat' 7 1 3 8 0 82 7 1 2 6 1 x 8 0 28 7 1 2 8 0 1 7 1 2 0 1 0
+6 1 l 8 0 1 7 1 3 8 0 82 7 1 2 6 4 drow 8 0 1 7 1 2 6 1 I 6 1 l 0 -1 0
+6 1 l 0 0 0
+8 0 82 7 1 2 6 1 x 8 0 28 7 1 2 8 0 1 7 1 2 8 0 82 7 1 2 6 4 drow 8 0 1 7 1 2 6 1 I 6 1 l 6 1 l 8 0 1 7 1 2 8 0 0 'len' 6 1 x 6 1 l 6 1 x 8 0 71 7 0 4 8 0 15 7 1 2 0 1 0
+6 1 I 8 0 36 7 1 2 6 1 I 8 0 0 'len' 6 4 dcol 8 0 15 7 1 2 8 0 1 7 1 2 6 1 I 0 1 0
+6 1 I 8 0 72 7 1 3 8 0 70 7 0 3 8 0 35 7 1 2 8 0 82 7 1 2 6 4 dcol 8 0 1 7 1 2 6 1 I 6 1 l 8 0 0 'len' 6 1 y 8 0 72 7 1 2 8 0 15 7 1 2 8 0 0 'prepend' 7 1 2 6 1 y 0 0 0
+6 1 y 8 0 53 0 0 0
+0 0 0
+8 0 70 7 0 3 8 0 37 7 1 2 8 0 82 7 1 2 6 4 dcol 8 0 1 7 1 2 6 1 I 6 1 l 8 0 0 'len' 6 1 y 8 0 72 7 1 2 8 0 15 7 1 2 8 0 0 'append' 7 1 2 6 1 y 0 0 0
+6 1 y 8 0 53 0 0 0
+0 0 0
+8 0 15 7 1 2 8 0 0 'concat' 7 1 3 8 0 82 7 1 2 6 1 y 8 0 28 7 1 2 8 0 1 7 1 2 0 1 0
+6 1 l 8 0 1 7 1 3 8 0 82 7 1 2 6 4 dcol 8 0 1 7 1 2 6 1 I 6 1 l 0 -1 0
+6 1 l 0 0 0
+8 0 82 7 1 2 6 1 y 8 0 28 7 1 2 8 0 1 7 1 2 8 0 82 7 1 2 6 4 dcol 8 0 1 7 1 2 6 1 I 6 1 l 6 1 l 8 0 1 7 1 2 8 0 0 'len' 6 1 y 6 1 l 6 1 y 8 0 43 7 0 2 6 1 x 6 1 y 6 11 insertZeros 8 0 15 7 1 2 8 0 73 7 1 3 7 1 0 7 1 0 7 32 1 8 0 74 7 1 2 8 0 82 7 1 2 7 0 2 0 1 0
+0 0 0
+0 1 0
+0 1 0
+6 6 istart 8 0 15 7 1 2 8 0 1 6 8 infinity 6 5 lpmax 8 0 15 7 1 2 8 0 2 6 8 infinity 6 5 lpmin 8 0 15 7 1 2 8 0 73 7 1 3 7 1 3 6 1 a 6 1 b 6 1 n 7 1 3 0 0 0
+0 0 0
+0 0 0
+8 0 42 7 1 2 7 0 2 7 1 5 6 4 i_i_ 6 5 ratio 8 0 15 7 1 2 0 0 0
+6 1 j 8 0 15 7 1 2 8 0 1 6 8 infinity 6 8 minratio 8 0 15 7 1 2 8 0 2 8 0 32 8 0 81 7 1 2 6 6 istart 7 1 0 6 1 l 7 1 0 7 32 2 8 0 71 7 0 4 8 0 15 7 1 2 0 1 0
+6 4 i_i_ 8 0 36 7 1 2 6 4 i_i_ 8 0 1 7 1 2 8 0 0 'len' 6 1 b 8 0 2 6 1 n 8 0 15 7 1 2 8 0 1 7 1 2 6 4 i_i_ 0 1 0
+6 4 i_i_ 8 0 72 7 1 3 8 0 70 7 0 3 8 0 36 7 1 2 8 0 82 7 1 2 6 1 a 8 0 1 7 1 2 6 4 i_i_ 6 1 l 0 0 0
+8 0 53 0 0 0
+0 0 0
+8 0 15 7 1 2 8 0 5 7 1 2 8 0 82 7 1 2 6 1 b 8 0 1 7 1 2 6 4 i_i_ 6 1 l 8 0 82 7 1 2 6 1 a 8 0 1 7 1 2 6 4 i_i_ 6 1 l 6 5 ratio 8 0 70 7 0 3 8 0 37 7 1 2 6 8 minratio 6 5 ratio 8 0 72 7 1 2 8 0 15 7 1 2 6 5 ratio 6 8 minratio 8 0 15 7 1 2 6 4 i_i_ 6 1 j 0 0 0
+8 0 43 6 1 j 6 8 minRatio 8 0 15 7 1 2 8 0 73 7 1 3 7 1 3 6 1 m 6 1 j 6 1 k 7 1 3 0 0 0
+0 0 0
+0 0 0
+8 0 0 'pivot' 7 1 3 8 0 15 7 1 2 8 0 5 7 1 2 8 0 82 7 1 2 6 1 m 6 1 j 8 0 82 7 1 2 8 0 82 7 1 2 6 1 m 6 1 j 6 1 k 8 0 82 7 1 2 6 1 m 6 1 j 6 1 j 6 1 k 6 6 pivot1 8 0 15 7 1 2 8 0 73 7 1 3 7 1 1 6 1 a 7 1 1 0 0 0
+8 0 42 7 1 2 7 0 2 7 1 11 8 0 15 7 1 2 8 0 0 'dim' 6 1 a 6 1 d 6 9 maxMinRow 6 9 minMaxCol 8 0 15 7 1 2 8 0 0 'copy' 7 0 2 0 1 0
+0 -1 0
+6 1 u 6 1 I 6 1 J 6 1 K 8 0 15 7 1 2 8 0 0 'copy' 7 0 0 6 6 saddle 8 0 15 7 1 2 8 0 0 'copy' 7 0 0 6 1 x 8 0 15 7 1 2 8 0 0 'copy' 7 0 0 6 1 y 8 0 15 7 1 2 8 0 2 8 0 32 8 0 81 7 1 2 6 6 istart 7 1 0 6 1 l 7 1 0 7 32 9 8 0 70 7 0 3 8 0 74 7 1 2 6 1 d 0 1 0
+8 0 72 7 1 2 8 0 15 7 1 2 8 0 0 'copy' 7 0 1 6 1 a 6 1 a 8 0 15 7 1 2 8 0 0 'copy' 7 0 2 0 1 0
+0 1 0
+6 1 d 0 0 0
+8 0 15 7 1 2 8 0 0 'col' 7 1 2 6 1 a 8 0 1 7 1 2 0 0 0
+6 1 l 6 9 maxMinRow 8 0 15 7 1 2 8 0 82 7 1 2 6 1 a 8 0 1 7 1 2 0 1 0
+6 1 l 6 9 minMaxCol 8 0 71 7 0 4 8 0 15 7 1 2 0 1 0
+6 1 I 8 0 36 7 1 2 6 1 I 8 0 82 7 1 2 6 1 d 8 0 1 7 1 2 0 1 0
+6 1 l 8 0 15 7 1 2 8 0 1 7 1 2 6 1 I 0 1 0
+6 1 I 8 0 15 7 1 2 8 0 0 'min' 8 0 82 7 1 2 6 1 a 8 0 1 7 1 2 6 1 I 6 1 l 8 0 82 7 1 2 6 9 maxMinRow 8 0 1 7 1 2 6 1 I 6 1 l 8 0 15 7 1 2 8 0 0 'max' 6 9 maxMinRow 8 0 82 7 1 2 6 1 u 8 0 1 7 1 2 0 1 0
+6 1 l 8 0 71 7 0 4 8 0 15 7 1 2 0 1 0
+6 1 I 8 0 36 7 1 2 6 1 I 8 0 82 7 1 2 6 1 d 8 0 1 7 1 2 0 2 0
+6 1 l 8 0 15 7 1 2 8 0 1 7 1 2 6 1 I 0 1 0
+6 1 I 8 0 15 7 1 2 8 0 0 'max' 8 0 0 'col' 7 1 2 6 1 a 8 0 1 7 1 2 6 1 I 6 1 l 8 0 82 7 1 2 6 9 minMaxCol 8 0 1 7 1 2 6 1 I 6 1 l 8 0 15 7 1 2 8 0 0 'min' 6 9 minMaxCol 8 0 82 7 1 2 6 1 u 8 0 1 7 1 2 0 2 0
+6 1 l 8 0 70 7 0 3 8 0 74 7 1 2 8 0 82 7 1 2 6 1 u 8 0 1 7 1 2 0 1 0
+6 1 l 8 0 82 7 1 2 6 1 u 8 0 1 7 1 2 0 2 0
+6 1 l 8 0 72 7 1 7 8 0 71 7 0 4 8 0 15 7 1 2 8 0 0 'contains' 7 1 2 6 9 maxMinRow 8 0 82 7 1 2 6 1 u 8 0 1 7 1 2 0 1 0
+6 1 l 6 1 I 8 0 36 7 1 2 6 1 I 8 0 82 7 1 2 6 1 d 8 0 1 7 1 2 0 1 0
+6 1 l 8 0 15 7 1 2 8 0 1 7 1 2 6 1 I 0 1 0
+6 1 I 8 0 71 7 0 4 8 0 15 7 1 2 8 0 0 'contains' 7 1 2 6 9 minMaxCol 8 0 82 7 1 2 6 1 u 8 0 1 7 1 2 0 2 0
+6 1 l 6 1 J 8 0 36 7 1 2 6 1 J 8 0 82 7 1 2 6 1 d 8 0 1 7 1 2 0 2 0
+6 1 l 8 0 15 7 1 2 8 0 1 7 1 2 6 1 J 0 1 0
+6 1 J 8 0 70 7 0 3 8 0 74 7 1 2 8 0 82 7 1 2 6 9 maxMinRow 8 0 1 7 1 2 6 1 I 6 1 l 8 0 82 7 1 2 6 9 minMaxCol 8 0 1 7 1 2 6 1 J 6 1 l 8 0 70 7 0 3 8 0 74 7 1 2 8 0 0 'len' 6 6 saddle 0 0 0
+8 0 15 7 1 2 8 0 0 'copy' 7 0 2 6 1 I 6 1 J 6 6 saddle 8 0 70 7 0 3 8 0 33 7 1 2 8 0 74 7 1 2 8 0 0 'len' 6 6 saddle 0 2 0
+8 0 74 7 1 2 8 0 0 'len' 8 0 82 7 1 2 6 6 saddle 8 0 1 7 1 2 0 1 0
+6 1 l 0 1 0
+8 0 15 7 1 2 8 0 0 'append' 7 1 2 7 0 1 6 6 saddle 7 0 2 6 1 I 6 1 J 6 6 saddle 8 0 15 7 1 2 8 0 0 'append' 7 1 2 6 6 saddle 7 0 2 6 1 I 6 1 J 6 6 saddle 0 0 0
+8 0 70 7 0 3 8 0 39 7 1 2 8 0 0 'dim' 8 0 0 'dim' 6 6 saddle 0 2 0
+8 0 15 7 1 2 8 0 0 'copy' 7 0 1 6 6 saddle 6 6 saddle 0 0 0
+8 0 15 7 1 2 8 0 0 'col' 7 1 2 6 6 saddle 0 1 0
+6 1 K 8 0 71 7 0 4 8 0 15 7 1 2 0 1 0
+6 1 I 8 0 36 7 1 2 6 1 I 8 0 0 'len' 6 1 K 8 0 15 7 1 2 8 0 1 7 1 2 6 1 I 0 1 0
+6 1 I 8 0 72 7 1 3 8 0 15 7 1 2 8 0 0 'copy' 7 0 1 8 0 0 op 8 0 0 'makelist' 7 1 3 0 0 0
+0 1 0
+8 0 82 7 1 2 6 1 d 8 0 1 7 1 2 0 1 0
+6 1 l 6 1 J 8 0 15 7 1 2 0 1 0
+8 0 82 7 1 2 6 1 J 8 0 1 7 1 2 8 0 82 7 1 2 6 1 K 8 0 1 7 1 2 6 1 I 6 1 l 6 1 l 8 0 70 7 0 3 8 0 32 8 0 0 'contains' 7 1 2 6 1 x 6 1 J 8 0 15 7 1 2 8 0 0 'append' 7 1 2 6 1 x 6 1 J 6 1 x 0 0 0
+8 0 15 7 1 2 8 0 0 'col' 7 1 2 6 6 saddle 8 0 1 7 1 2 0 2 0
+6 1 l 6 1 K 8 0 71 7 0 4 8 0 15 7 1 2 0 1 0
+6 1 I 8 0 36 7 1 2 6 1 I 8 0 0 'len' 6 1 K 8 0 15 7 1 2 8 0 1 7 1 2 6 1 I 0 1 0
+6 1 I 8 0 72 7 1 3 8 0 15 7 1 2 8 0 0 'copy' 7 0 1 8 0 0 op 8 0 0 'makelist' 7 1 3 0 0 0
+0 1 0
+8 0 82 7 1 2 6 1 d 8 0 1 7 1 2 0 2 0
+6 1 l 6 1 J 8 0 15 7 1 2 0 1 0
+8 0 82 7 1 2 6 1 J 8 0 1 7 1 2 8 0 82 7 1 2 6 1 K 8 0 1 7 1 2 6 1 I 6 1 l 6 1 l 8 0 70 7 0 3 8 0 32 8 0 0 'contains' 7 1 2 6 1 y 6 1 J 8 0 15 7 1 2 8 0 0 'append' 7 1 2 6 1 y 6 1 J 6 1 y 0 0 0
+8 0 43 7 0 3 8 0 82 7 1 2 6 1 u 8 0 1 7 1 2 0 1 0
+6 1 l 8 0 0 'transpose' 6 1 x 8 0 0 'transpose' 6 1 y 0 0 0
+8 0 43 7 0 2 8 0 82 7 1 2 6 1 u 8 0 1 7 1 2 0 1 0
+6 1 l 8 0 82 7 1 2 6 1 u 8 0 1 7 1 2 0 2 0
+6 1 l 6 9 pureCheck 8 0 15 7 1 2 8 0 73 7 1 3 7 1 1 6 1 a 7 1 1 0 0 0
+8 0 42 7 1 2 7 0 2 7 1 15 8 0 15 7 1 2 0 0 0
+6 3 art 8 0 15 7 1 2 8 0 2 8 0 1 6 8 infinity 6 3 dir 8 0 15 7 1 2 8 0 0 'copy' 7 0 0 6 6 binary 8 0 15 7 1 2 8 0 0 'copy' 7 0 0 6 8 integers 8 0 15 7 1 2 8 0 0 'copy' 7 0 0 6 12 unrestricted 6 1 b 6 1 c 6 1 d 6 1 v 6 2 bv 6 1 n 6 1 I 6 1 J 8 0 15 7 1 2 0 0 0
+6 2 ge 8 0 15 7 1 2 8 0 2 8 0 32 8 0 81 7 1 2 6 6 istart 7 1 0 6 1 l 7 1 0 7 32 24 8 0 70 7 0 3 8 0 39 7 1 2 8 0 0 'dim' 8 0 15 7 1 2 8 0 0 'dim' 6 1 a 6 1 d 0 2 0
+8 0 72 7 1 5 8 0 70 7 0 3 8 0 37 7 1 2 6 1 d 0 5 0
+8 0 -1 throw 6 1 a 0 0 0
+8 0 15 7 1 2 6 1 a 7 1 5 6 1 a 6 3 dir 6 8 integers 6 6 binary 6 12 unrestricted 8 0 70 7 0 3 8 0 74 7 1 2 8 0 0 'type' 6 3 dir 0 7 1
+8 0 72 7 1 3 8 0 70 7 0 3 8 0 39 7 1 2 8 0 0 'dim' 6 3 dir 0 2 0
+8 0 -1 throw 7 1 2 6 3 dir 8 0 0 'quote' 8 0 39 7 1 2 13 1 0 size 0 2 0
+0 0 0
+8 0 15 7 1 2 6 3 dir 7 1 2 6 3 art 6 2 ge 8 0 15 7 1 2 6 3 art 6 3 dir 0 0 0
+8 0 70 7 0 3 8 0 74 7 1 2 8 0 15 7 1 2 8 0 10 6 3 dir 6 3 art 8 0 1 6 8 infinity 8 0 15 7 1 2 0 0 0
+6 3 art 0 0 0
+8 0 15 7 1 2 8 0 0 'dim' 6 1 a 6 1 d 0 0 0
+8 0 70 7 0 3 8 0 15 7 1 2 8 0 0 'len' 6 12 unrestricted 6 1 c 8 0 72 7 1 2 8 0 71 7 0 4 8 0 15 7 1 2 6 1 c 6 1 I 8 0 38 7 1 2 6 1 I 0 1 0
+8 0 15 7 1 2 8 0 1 7 1 2 6 1 I 0 -1 0
+6 1 I 8 0 72 7 1 3 8 0 15 7 1 2 8 0 0 'col' 7 1 2 6 1 a 8 0 1 7 1 2 8 0 82 7 1 2 6 12 unrestricted 8 0 1 7 1 2 6 1 I 6 1 l 6 1 l 6 1 b 8 0 15 7 1 2 8 0 81 7 1 2 6 7 addcol1 7 1 3 6 1 a 8 0 2 6 1 b 8 0 1 7 1 3 8 0 82 7 1 2 6 12 unrestricted 8 0 1 7 1 2 6 1 I 6 1 l 0 1 0
+6 1 l 6 1 a 8 0 70 7 0 3 8 0 15 7 1 2 8 0 0 'contains' 7 1 2 6 8 integers 8 0 82 7 1 2 6 12 unrestricted 8 0 1 7 1 2 6 1 I 6 1 l 6 1 n 8 0 72 7 1 2 8 0 15 7 1 2 8 0 0 'extend' 7 1 2 6 8 integers 0 0 0
+6 8 integers 8 0 71 7 0 4 8 0 15 7 1 2 8 0 0 'len' 6 8 integers 6 1 J 8 0 38 7 1 2 6 1 J 8 0 1 7 1 2 6 1 n 0 1 0
+8 0 15 7 1 2 8 0 1 7 1 2 6 1 J 0 -1 0
+6 1 J 8 0 15 7 1 2 8 0 1 7 1 3 8 0 82 7 1 2 6 8 integers 8 0 1 7 1 3 6 1 J 0 -1 0
+6 1 l 0 1 0
+6 1 l 8 0 82 7 1 2 6 8 integers 8 0 1 7 1 2 6 1 J 6 1 l 0 0 0
+8 0 75 7 1 2 8 0 82 7 1 2 6 1 d 8 0 1 7 1 2 0 2 0
+6 1 l 6 1 c 0 0 0
+8 0 15 7 1 2 8 0 0 'row' 7 1 2 6 1 a 8 0 1 7 1 2 8 0 82 7 1 2 6 1 d 8 0 1 7 1 2 0 1 0
+6 1 l 6 1 l 6 1 c 8 0 15 7 1 2 8 0 0 'delrows' 7 1 2 6 1 a 8 0 1 7 1 2 8 0 82 7 1 2 6 1 d 8 0 1 7 1 2 0 1 0
+6 1 l 6 1 l 6 1 a 8 0 70 7 0 3 8 0 15 7 1 2 8 0 0 'len' 6 6 binary 6 1 b 8 0 72 7 1 5 8 0 15 7 1 2 8 0 0 'copy' 7 0 0 6 1 v 8 0 71 7 0 4 8 0 15 7 1 2 0 1 0
+6 1 I 8 0 36 7 1 2 6 1 I 6 1 b 8 0 15 7 1 2 8 0 1 7 1 2 6 1 I 0 1 0
+6 1 I 8 0 72 7 1 4 8 0 15 7 1 2 8 0 0 'makelist' 8 0 82 7 1 2 6 1 d 8 0 1 7 1 2 0 2 0
+6 1 l 6 1 n 8 0 15 7 1 2 0 1 0
+8 0 82 7 1 2 6 1 n 8 0 1 7 1 2 8 0 82 7 1 2 6 6 binary 8 0 1 7 1 2 6 1 I 6 1 l 6 1 l 8 0 15 7 1 2 0 1 0
+8 0 82 7 1 2 6 1 n 8 0 1 7 1 2 0 0 0
+6 1 l 8 0 15 7 1 2 8 0 0 'append' 7 1 2 6 1 v 6 1 n 6 1 v 8 0 15 7 1 2 8 0 0 'append' 7 1 2 6 1 a 8 0 0 op 6 1 v 6 1 a 8 0 75 7 1 2 8 0 82 7 1 2 6 1 d 8 0 1 7 1 2 0 1 0
+6 1 l 6 1 b 8 0 15 7 1 2 8 0 0 'sort' 8 0 29 7 1 2 6 8 integers 6 6 binary 6 8 integers 0 0 0
+8 0 15 7 1 2 8 0 0 'col' 7 1 2 6 1 a 8 0 1 7 1 2 8 0 82 7 1 2 6 1 d 8 0 1 7 1 2 0 2 0
+6 1 l 6 1 l 6 1 b 8 0 15 7 1 2 8 0 0 'delcols' 7 1 2 6 1 a 8 0 1 7 1 2 8 0 82 7 1 2 6 1 d 8 0 1 7 1 2 0 2 0
+6 1 l 6 1 l 6 1 a 8 0 15 7 1 2 8 0 86 7 1 2 6 1 d 0 1 0
+6 1 d 8 0 70 7 0 3 6 2 ge 8 0 72 7 1 2 8 0 71 7 0 4 8 0 15 7 1 2 0 1 0
+6 1 I 8 0 36 7 1 2 6 1 I 6 2 ge 8 0 15 7 1 2 8 0 1 7 1 2 6 1 I 0 1 0
+6 1 I 8 0 72 7 1 4 8 0 15 7 1 2 8 0 0 'makelist' 8 0 82 7 1 2 6 1 d 8 0 1 7 1 2 0 1 0
+6 1 l 6 1 v 8 0 15 7 1 2 0 -1 0
+8 0 82 7 1 2 6 1 v 8 0 1 7 1 3 6 3 art 6 1 I 6 1 l 8 0 75 7 1 2 8 0 82 7 1 2 6 1 d 8 0 1 7 1 2 0 2 0
+6 1 l 0 1 0
+8 0 15 7 1 2 8 0 0 'concat' 7 1 2 6 1 a 8 0 0 'transpose' 6 1 v 6 1 a 8 0 75 7 1 2 6 3 art 6 2 ge 0 0 0
+8 0 70 7 0 3 8 0 34 7 1 2 8 0 74 7 1 2 6 3 art 0 0 0
+8 0 74 7 1 2 6 3 art 8 0 82 7 1 2 6 1 d 8 0 1 7 1 2 0 1 0
+6 1 l 8 0 15 7 1 2 8 0 0 'concat' 7 1 2 6 1 a 8 0 0 'identity' 8 0 82 7 1 2 6 1 d 8 0 1 7 1 2 0 1 0
+6 1 l 6 1 a 8 0 72 7 1 3 8 0 15 7 1 2 8 0 0 'append' 7 1 2 8 0 0 'makemat' 7 1 3 0 0 0
+6 3 art 8 0 1 7 1 2 8 0 82 7 1 2 6 1 d 8 0 1 7 1 2 0 1 0
+6 1 l 8 0 2 6 3 art 8 0 0 op 8 0 0 'identity' 8 0 1 7 1 2 8 0 82 7 1 2 6 1 d 8 0 1 7 1 2 0 1 0
+6 1 l 8 0 2 6 3 art 6 1 v 8 0 15 7 1 2 8 0 0 'concat' 7 1 2 6 1 v 8 0 0 'append' 7 1 2 8 0 0 'identity' 6 3 art 8 0 0 op 8 0 0 'makemat' 7 1 3 0 0 0
+8 0 1 7 1 2 8 0 82 7 1 2 6 1 d 8 0 1 7 1 2 0 1 0
+6 1 l 8 0 2 6 3 art 6 3 art 6 1 v 8 0 15 7 1 2 8 0 0 'concat' 7 1 2 6 1 a 6 1 v 6 1 a 8 0 15 7 1 2 8 0 0 'concat' 7 1 2 6 1 a 8 0 0 'transpose' 6 1 b 6 1 a 8 0 75 7 1 2 8 0 82 7 1 2 6 1 d 8 0 1 7 1 2 0 2 0
+6 1 l 0 1 0
+8 0 15 7 1 2 8 0 0 'extend' 7 1 2 6 1 c 8 0 0 'makelist' 8 0 1 7 1 2 8 0 82 7 1 2 6 1 d 8 0 1 7 1 2 0 1 0
+6 1 l 6 2 ge 6 1 c 8 0 15 7 1 2 8 0 82 7 1 2 6 1 c 8 0 1 7 1 2 8 0 82 7 1 2 6 1 d 8 0 1 7 1 2 0 2 0
+6 1 l 6 1 l 8 0 82 7 1 2 6 1 c 8 0 1 7 1 2 0 0 0
+6 1 l 8 0 15 7 1 2 0 0 0
+8 0 82 7 1 2 6 1 c 8 0 1 7 1 2 8 0 82 7 1 2 6 1 d 8 0 1 7 1 2 0 2 0
+6 1 l 6 1 l 8 0 15 7 1 2 8 0 0 'append' 7 1 2 6 1 a 6 1 c 6 1 a 8 0 15 7 1 2 6 3 art 6 1 n 8 0 15 7 1 2 8 0 86 7 1 2 8 0 0 'dim' 6 1 a 0 1 0
+7 1 2 6 1 c 6 1 v 8 0 15 7 1 2 8 0 0 'extend' 7 1 2 8 0 0 'range' 7 1 2 8 0 1 7 1 3 6 1 v 8 0 2 6 3 art 0 1 0
+8 0 1 7 1 2 6 1 v 0 1 0
+8 0 0 'range' 7 1 2 8 0 82 7 1 2 6 1 d 8 0 1 7 1 2 0 2 0
+6 1 l 8 0 1 7 1 3 6 1 v 8 0 2 6 3 art 0 1 0
+6 2 bv 8 0 70 7 0 3 8 0 37 7 1 2 6 3 dir 0 0 0
+8 0 15 7 1 2 8 0 2 8 0 82 7 1 2 6 1 a 8 0 1 7 1 2 0 0 0
+6 1 l 8 0 82 7 1 2 6 1 a 8 0 1 7 1 2 0 0 0
+6 1 l 0 0 0
+8 0 15 7 1 2 8 0 81 7 1 2 6 9 addartrow 7 1 2 6 1 a 6 3 art 6 1 a 8 0 70 7 0 3 8 0 74 7 1 2 6 8 integers 7 0 0 8 0 15 7 1 2 8 0 81 7 1 2 6 12 simplex_core 7 1 5 6 1 a 6 2 bv 6 3 art 0 0 0
+0 0 0
+6 1 c 8 0 15 7 1 2 8 0 81 7 1 2 6 11 simplex_int 7 1 6 6 1 a 6 2 bv 6 3 art 0 0 0
+0 0 0
+6 8 integers 6 1 c 8 0 70 7 0 3 8 0 33 7 1 2 8 0 37 7 1 2 6 3 dir 0 0 0
+8 0 39 7 1 2 8 0 82 7 1 2 6 1 c 8 0 1 7 1 2 0 1 0
+6 1 l 8 0 81 7 1 2 6 12 NO_SOLUTIONS 7 1 0 8 0 15 7 1 2 8 0 2 8 0 82 7 1 2 6 1 c 8 0 1 7 1 2 0 1 0
+6 1 l 8 0 82 7 1 2 6 1 c 8 0 1 7 1 2 0 1 0
+6 1 l 0 0 0
+8 0 43 6 1 c 6 7 simplex 8 0 15 7 1 2 8 0 73 7 1 3 7 1 5 6 1 a 6 2 bv 6 3 art 6 3 ign 6 1 P 7 1 5 0 0 0
+0 0 0
+0 0 0
+0 0 0
+0 0 0
+8 0 42 7 1 2 7 0 2 7 1 14 8 0 15 7 1 2 8 0 0 'copy' 7 0 0 6 2 a2 6 1 b 6 1 c 8 0 15 7 1 2 8 0 0 'dim' 6 1 a 6 1 d 6 4 bmin 6 4 cmin 8 0 15 7 1 2 8 0 1 7 1 2 0 1 0
+8 0 37 7 1 2 6 3 art 0 0 0
+6 1 n 8 0 15 7 1 2 8 0 0 'copy' 7 0 0 6 2 l1 8 0 15 7 1 2 8 0 0 'copy' 7 0 0 6 2 l2 8 0 15 7 1 2 0 0 0
+6 1 I 8 0 15 7 1 2 0 0 0
+6 1 J 8 0 15 7 1 2 8 0 0 'copy' 7 0 1 8 0 81 7 1 2 6 11 basis_to_id 7 1 2 6 2 bv 8 0 1 7 1 2 8 0 81 7 1 2 8 0 0 'dim' 6 1 a 0 2 0
+0 -1 0
+6 5 bvIDS 8 0 15 7 1 2 0 0 6
+6 5 bland 8 0 15 7 1 2 8 0 2 8 0 32 8 0 81 7 1 2 6 6 istart 7 1 0 6 1 l 7 1 0 7 32 10 8 0 15 7 1 2 8 0 82 7 1 2 8 0 0 'row' 7 1 2 6 1 a 8 0 1 7 1 2 0 0 0
+6 1 l 8 0 28 7 1 2 8 0 1 7 1 2 0 1 0
+6 1 l 8 0 1 7 1 3 8 0 82 7 1 2 6 1 d 8 0 1 7 1 2 0 2 0
+6 1 l 8 0 2 8 0 1 7 1 2 6 3 ign 0 1 0
+6 1 l 6 1 c 8 0 15 7 1 2 8 0 0 'min' 6 1 c 6 4 cmin 8 0 15 7 1 2 8 0 82 7 1 2 8 0 0 'col' 7 1 2 6 1 a 8 0 1 7 1 2 0 0 0
+6 1 l 8 0 28 7 1 2 8 0 1 7 1 2 0 1 0
+6 1 l 8 0 1 7 1 3 8 0 82 7 1 2 6 1 d 8 0 1 7 1 2 0 1 0
+6 1 l 8 0 2 6 1 n 6 1 l 6 1 b 8 0 15 7 1 2 8 0 0 'min' 6 1 b 6 4 bmin 8 0 71 7 0 4 0 0 0
+8 0 34 7 1 2 8 0 35 7 1 2 6 4 cmin 0 0 0
+8 0 35 7 1 2 6 4 bmin 0 0 0
+0 0 0
+8 0 72 7 1 5 8 0 71 7 0 4 8 0 15 7 1 2 0 1 0
+6 1 I 8 0 36 7 1 2 6 1 I 8 0 1 7 1 3 8 0 82 7 1 2 6 1 d 8 0 1 7 1 2 0 2 0
+6 1 l 0 -1 0
+8 0 2 6 3 ign 8 0 15 7 1 2 8 0 1 7 1 2 6 1 I 0 1 0
+6 1 I 8 0 70 7 0 3 8 0 33 7 1 2 8 0 35 7 1 2 8 0 82 7 1 2 6 1 c 8 0 1 7 1 2 6 1 I 6 1 l 0 0 0
+8 0 36 7 1 2 8 0 0 'max' 8 0 0 'col' 7 1 2 6 1 a 8 0 1 7 1 2 6 1 I 6 1 l 0 0 0
+8 0 43 7 0 5 8 0 2 8 0 1 6 8 infinity 6 1 a 6 2 bv 6 1 P 7 0 0 0 0 0
+8 0 70 7 0 3 6 5 bland 8 0 71 7 0 4 8 0 15 7 1 2 0 1 0
+6 1 I 8 0 36 7 1 2 6 1 I 8 0 1 7 1 3 8 0 82 7 1 2 6 1 d 8 0 1 7 1 2 0 2 0
+6 1 l 0 -1 0
+8 0 2 6 3 ign 8 0 15 7 1 2 8 0 1 7 1 2 6 1 I 0 1 0
+6 1 I 8 0 70 7 0 3 8 0 33 7 1 2 8 0 35 7 1 2 8 0 82 7 1 2 6 1 c 8 0 1 7 1 2 6 1 I 6 1 l 0 0 0
+8 0 32 8 0 0 'contains' 7 1 2 6 2 bv 6 1 I 8 0 15 7 1 2 6 1 I 6 1 J 0 0 0
+8 0 15 7 1 2 8 0 0 'contains' 7 1 2 6 1 c 6 4 cmin 6 1 J 8 0 15 7 1 2 8 0 81 7 1 2 6 8 minRatio 7 1 3 8 0 0 'col' 7 1 2 6 1 a 8 0 1 7 1 2 6 1 J 6 1 l 8 0 0 'col' 7 1 2 6 1 a 8 0 1 7 1 2 0 0 0
+6 1 l 6 1 n 6 1 I 8 0 70 7 0 3 8 0 39 7 1 2 8 0 82 7 1 2 6 2 bv 8 0 1 7 1 2 6 1 I 6 1 l 6 1 J 8 0 72 7 1 6 8 0 15 7 1 2 6 1 J 8 0 82 7 1 2 6 2 bv 8 0 1 7 1 2 6 1 I 6 1 l 8 0 15 7 1 2 8 0 81 7 1 2 6 6 pivot1 7 1 3 6 1 a 8 0 1 7 1 2 6 1 I 6 1 l 8 0 1 7 1 2 6 1 J 6 1 l 6 1 a 8 0 75 7 1 2 6 1 P 0 1 0
+8 0 70 7 0 3 8 0 0 'contains' 7 1 2 6 5 bvIDS 8 0 15 7 1 2 8 0 81 7 1 2 6 11 basis_to_id 7 1 2 6 2 bv 8 0 1 7 1 2 8 0 82 7 1 2 6 1 d 8 0 1 7 1 2 0 2 0
+6 1 l 0 -1 0
+6 1 c 8 0 15 7 1 2 0 1 6
+6 5 bland 8 0 15 7 1 2 8 0 0 'append' 7 1 2 6 5 bvIDS 6 1 c 6 5 bvIDS 8 0 15 7 1 2 8 0 82 7 1 2 8 0 0 'row' 7 1 2 6 1 a 8 0 1 7 1 2 0 0 0
+6 1 l 8 0 28 7 1 2 8 0 1 7 1 2 0 1 0
+6 1 l 8 0 1 7 1 4 8 0 82 7 1 2 6 1 d 8 0 1 7 1 2 0 2 0
+6 1 l 8 0 2 6 3 ign 0 -1 0
+6 1 l 6 1 c 8 0 70 7 0 3 8 0 35 7 1 2 8 0 15 7 1 2 8 0 0 'min' 6 1 c 6 4 cmin 0 0 0
+8 0 53 0 0 0
+0 0 0
+0 0 0
+8 0 70 7 0 3 8 0 38 7 1 2 6 4 cmin 0 0 0
+8 0 70 7 0 3 8 0 37 7 1 2 6 3 art 0 0 0
+8 0 72 7 1 7 8 0 70 7 0 3 8 0 82 7 1 2 6 1 a 7 1 2 8 0 1 7 1 2 0 0 0
+6 1 l 8 0 1 7 1 2 0 0 0
+6 1 l 8 0 43 7 0 5 8 0 81 7 1 2 6 12 NO_SOLUTIONS 7 1 0 6 1 a 6 2 bv 6 1 P 7 0 0 0 0 0
+8 0 15 7 1 2 8 0 0 'delrows' 7 1 2 6 1 a 8 0 1 7 1 2 8 0 82 7 1 2 6 1 d 8 0 1 7 1 2 0 1 0
+6 1 l 6 1 l 6 1 a 8 0 76 7 1 2 8 0 82 7 1 2 6 1 d 8 0 1 7 1 2 0 1 0
+6 1 l 8 0 15 7 1 2 0 1 0
+6 1 n 8 0 75 7 1 2 6 3 ign 6 3 art 8 0 15 7 1 2 0 0 0
+6 3 art 8 0 15 7 1 2 8 0 82 7 1 2 8 0 0 'row' 7 1 2 6 1 a 8 0 1 7 1 2 0 0 0
+6 1 l 8 0 28 7 1 2 8 0 1 7 1 2 0 1 0
+6 1 l 8 0 1 7 1 4 8 0 82 7 1 2 6 1 d 8 0 1 7 1 2 0 2 0
+6 1 l 8 0 2 6 3 ign 0 -1 0
+6 1 l 6 1 c 8 0 15 7 1 2 8 0 0 'min' 6 1 c 6 4 cmin 8 0 72 7 1 3 8 0 15 7 1 2 8 0 82 7 1 2 8 0 0 'col' 7 1 2 6 1 a 8 0 1 7 1 2 0 0 0
+6 1 l 8 0 28 7 1 2 8 0 1 7 1 2 0 1 0
+6 1 l 8 0 1 7 1 3 8 0 82 7 1 2 6 1 d 8 0 1 7 1 2 0 1 0
+6 1 l 8 0 2 6 1 n 6 1 l 6 1 b 8 0 15 7 1 2 8 0 0 'min' 6 1 b 6 4 bmin 8 0 70 7 0 3 8 0 35 7 1 2 6 4 bmin 0 0 0
+8 0 72 7 1 8 8 0 71 7 0 4 8 0 15 7 1 2 0 1 0
+6 1 I 8 0 36 7 1 2 6 1 I 8 0 0 'len' 6 1 b 8 0 15 7 1 2 8 0 1 7 1 2 6 1 I 0 1 0
+6 1 I 8 0 70 7 0 3 8 0 33 7 1 2 8 0 35 7 1 2 8 0 82 7 1 2 6 1 b 8 0 1 7 1 2 6 1 I 6 1 l 0 0 0
+8 0 38 7 1 2 8 0 0 'min' 8 0 82 7 1 2 8 0 0 'row' 7 1 2 6 1 a 8 0 1 7 1 2 6 1 I 6 1 l 8 0 28 7 1 2 8 0 1 7 1 2 0 1 0
+6 1 l 8 0 1 7 1 4 8 0 82 7 1 2 6 1 d 8 0 1 7 1 2 0 2 0
+6 1 l 0 -1 0
+8 0 2 6 3 ign 6 1 l 0 0 0
+8 0 43 7 0 5 8 0 81 7 1 2 6 12 NO_SOLUTIONS 7 1 0 6 1 a 6 2 bv 6 1 P 7 0 0 0 0 0
+8 0 15 7 1 2 8 0 0 'contains' 7 1 2 6 1 b 6 4 bmin 6 1 I 8 0 15 7 1 2 8 0 81 7 1 2 6 8 minRatio 7 1 3 8 0 2 8 0 82 7 1 2 6 1 a 8 0 1 7 1 2 6 1 I 6 1 l 6 1 c 0 0 0
+6 1 J 8 0 15 7 1 2 6 1 J 8 0 82 7 1 2 6 2 bv 8 0 1 7 1 2 6 1 I 6 1 l 8 0 15 7 1 2 8 0 81 7 1 2 6 6 pivot1 7 1 3 6 1 a 8 0 1 7 1 2 6 1 I 6 1 l 8 0 1 7 1 2 6 1 J 6 1 l 6 1 a 8 0 75 7 1 2 6 1 P 0 1 0
+8 0 15 7 1 2 8 0 82 7 1 2 8 0 0 'row' 7 1 2 6 1 a 8 0 1 7 1 2 0 0 0
+6 1 l 8 0 28 7 1 2 8 0 1 7 1 2 0 1 0
+6 1 l 8 0 1 7 1 4 8 0 82 7 1 2 6 1 d 8 0 1 7 1 2 0 2 0
+6 1 l 8 0 2 6 3 ign 0 -1 0
+6 1 l 6 1 c 8 0 15 7 1 2 8 0 0 'min' 6 1 c 6 4 cmin 0 0 0
+0 0 0
+8 0 15 7 1 2 8 0 81 7 1 2 6 3 sol 6 1 a 6 2 l1 8 0 15 7 1 2 6 1 a 6 2 a2 8 0 15 7 1 2 8 0 82 7 1 2 8 0 0 'row' 7 1 2 6 2 a2 8 0 1 7 1 2 0 0 0
+6 1 l 8 0 28 7 1 2 8 0 1 7 1 2 0 1 0
+6 1 l 8 0 1 7 1 4 8 0 82 7 1 2 6 1 d 8 0 1 7 1 2 0 2 0
+6 1 l 8 0 2 6 3 ign 0 -1 0
+6 1 l 6 1 c 8 0 71 7 0 4 8 0 15 7 1 2 0 1 0
+6 1 J 8 0 36 7 1 2 6 1 J 8 0 0 'len' 6 1 c 8 0 15 7 1 2 8 0 1 7 1 2 6 1 J 0 1 0
+6 1 J 8 0 72 7 1 8 8 0 70 7 0 3 8 0 34 7 1 2 8 0 82 7 1 2 6 1 c 8 0 1 7 1 2 6 1 J 6 1 l 8 0 0 'contains' 7 1 2 6 2 bv 6 1 J 8 0 53 0 0 0
+0 0 0
+8 0 70 7 0 3 8 0 34 7 1 2 8 0 74 7 1 2 8 0 15 7 1 2 8 0 10 8 0 0 'transpose' 8 0 0 'col' 7 1 2 6 2 a2 8 0 1 7 1 2 6 1 J 6 1 l 6 1 b 0 1 0
+8 0 74 7 1 2 6 1 b 0 0 0
+8 0 53 0 0 0
+0 0 0
+8 0 15 7 1 2 8 0 81 7 1 2 6 8 minRatio 7 1 3 8 0 0 'col' 7 1 2 6 2 a2 8 0 1 7 1 2 6 1 J 6 1 l 8 0 0 'col' 7 1 2 6 2 a2 8 0 1 7 1 2 0 0 0
+6 1 l 0 1 0
+6 1 I 8 0 15 7 1 2 8 0 81 7 1 2 6 6 pivot1 7 1 3 6 2 a2 8 0 1 7 1 2 6 1 I 6 1 l 8 0 1 7 1 2 6 1 J 6 1 l 6 2 a2 8 0 75 7 1 2 6 1 P 0 1 0
+8 0 15 7 1 2 8 0 81 7 1 2 6 3 sol 6 2 a2 6 2 l2 8 0 70 7 0 3 8 0 74 7 1 2 6 2 l1 6 2 l2 8 0 52 0 0 0
+0 0 0
+8 0 43 7 0 5 8 0 2 8 0 82 7 1 2 8 0 82 7 1 2 6 1 a 8 0 1 7 1 2 0 0 0
+6 1 l 8 0 1 7 1 2 0 0 0
+6 1 l 6 1 a 6 2 bv 6 1 P 8 0 0 'transpose' 7 1 2 6 2 l1 6 2 l2 8 0 43 7 0 5 8 0 2 8 0 82 7 1 2 8 0 82 7 1 2 6 1 a 8 0 1 7 1 2 0 0 0
+6 1 l 8 0 1 7 1 2 0 0 0
+6 1 l 6 1 a 6 2 bv 6 1 P 8 0 0 'transpose' 6 2 l1 6 12 simplex_core 8 0 15 7 1 2 8 0 73 7 1 3 7 1 1 6 1 p 7 1 1 0 0 0
+8 0 42 7 1 2 7 0 2 7 1 6 8 0 15 7 1 2 8 0 0 'dim' 6 1 p 6 1 d 8 0 15 7 1 2 8 0 10 8 0 0 'min' 8 0 0 'min' 6 1 p 6 5 alpha 8 0 15 7 1 2 8 0 2 8 0 32 8 0 81 7 1 2 6 6 istart 7 1 0 6 1 l 6 1 v 6 1 x 6 1 y 7 1 0 7 32 12 8 0 70 7 0 3 6 5 alpha 8 0 15 7 1 2 8 0 85 7 1 2 6 1 p 6 5 alpha 6 1 p 0 0 0
+8 0 15 7 1 2 8 0 0 'concat' 7 1 2 6 1 p 8 0 0 'identity' 8 0 82 7 1 2 6 1 d 8 0 1 7 1 2 0 1 0
+6 1 l 6 1 p 8 0 15 7 1 2 8 0 0 'append' 7 1 2 6 1 p 7 0 1 8 0 0 op 8 0 0 'concat' 7 1 2 8 0 0 'makelist' 7 1 3 0 -1 0
+0 1 0
+8 0 82 7 1 2 6 1 d 8 0 1 7 1 2 0 2 0
+6 1 l 8 0 0 'makelist' 7 1 3 0 0 0
+0 1 0
+8 0 82 7 1 2 6 1 d 8 0 1 7 1 2 0 1 0
+6 1 l 6 1 p 8 0 15 7 1 2 8 0 81 7 1 2 6 7 addcol1 7 1 3 6 1 p 8 0 0 'concat' 7 1 2 8 0 0 'makelist' 7 1 3 0 1 0
+0 1 0
+8 0 82 7 1 2 6 1 d 8 0 1 7 1 2 0 1 0
+6 1 l 0 0 0
+8 0 1 7 1 4 8 0 82 7 1 2 6 1 d 8 0 1 7 1 2 0 2 0
+6 1 l 8 0 82 7 1 2 6 1 d 8 0 1 7 1 2 0 1 0
+6 1 l 0 1 0
+6 1 l 6 1 p 8 0 15 7 1 2 8 0 81 7 1 2 6 7 simplex 6 1 p 6 1 p 8 0 15 7 1 2 8 0 5 7 1 2 0 1 0
+8 0 2 8 0 82 7 1 2 6 1 p 8 0 1 7 1 2 0 1 0
+6 1 l 6 1 v 8 0 15 7 1 2 8 0 0 'redim' 7 1 2 8 0 82 7 1 2 6 1 p 8 0 1 7 1 2 0 0 0
+6 1 l 8 0 82 7 1 2 6 1 d 8 0 1 7 1 2 0 2 0
+6 1 l 6 1 y 8 0 15 7 1 2 8 0 82 7 1 2 8 0 82 7 1 2 8 0 82 7 1 2 6 1 p 8 0 1 7 1 2 0 2 0
+6 1 l 8 0 1 7 1 2 0 0 0
+6 1 l 8 0 28 7 1 2 8 0 1 7 1 3 8 0 82 7 1 2 6 1 d 8 0 1 7 1 2 0 2 0
+6 1 l 0 1 0
+6 1 l 8 0 1 7 1 3 8 0 82 7 1 2 6 1 d 8 0 1 7 1 2 0 2 0
+6 1 l 8 0 82 7 1 2 6 1 d 8 0 1 7 1 2 0 1 0
+6 1 l 6 1 l 6 1 x 8 0 77 7 1 2 6 1 y 6 1 v 8 0 77 7 1 2 6 1 x 6 1 v 8 0 70 7 0 3 6 5 alpha 8 0 76 7 1 2 6 1 v 6 5 alpha 0 0 0
+8 0 43 7 0 3 6 1 v 8 0 0 'transpose' 6 1 x 8 0 0 'transpose' 6 1 y 6 12 simplex_game 8 0 15 7 1 2 8 0 73 7 1 3 7 1 6 6 1 a 6 2 bv 6 3 art 6 3 ign 6 1 P 6 8 integers 7 1 6 0 0 0
+0 0 0
+0 0 0
+0 0 0
+0 0 0
+0 0 0
+8 0 42 7 1 2 7 0 2 7 1 7 6 1 b 6 1 d 6 1 x 8 0 15 7 1 2 0 0 0
+6 1 I 8 0 15 7 1 2 0 0 0
+6 1 J 8 0 15 7 1 2 8 0 0 'len' 6 8 integers 6 7 len_int 8 0 15 7 1 2 8 0 2 8 0 32 8 0 81 7 1 2 6 6 istart 7 1 0 6 1 l 7 1 0 7 32 5 8 0 15 7 1 2 8 0 81 7 1 2 6 12 simplex_core 7 1 5 6 1 a 6 2 bv 6 3 art 6 3 ign 6 1 P 6 1 a 8 0 75 7 1 2 6 3 ign 6 3 art 8 0 15 7 1 2 0 0 0
+6 3 art 8 0 71 7 0 4 0 0 0
+8 0 0 'len' 8 0 15 7 1 2 8 0 82 7 1 2 6 1 a 8 0 1 7 1 2 0 0 0
+6 1 l 6 1 x 0 0 0
+8 0 72 7 1 15 8 0 70 7 0 3 8 0 37 7 1 2 8 0 0 'len' 8 0 82 7 1 2 6 1 x 8 0 1 7 1 2 0 1 0
+6 1 l 0 1 0
+8 0 72 7 1 7 8 0 15 7 1 2 8 0 0 'col' 7 1 2 6 1 x 8 0 1 7 1 2 0 1 0
+6 1 l 6 1 d 8 0 71 7 0 4 8 0 15 7 1 2 0 1 0
+6 1 I 8 0 36 7 1 2 6 1 I 6 7 len_int 8 0 15 7 1 2 8 0 1 7 1 2 6 1 I 0 1 0
+6 1 I 8 0 70 7 0 3 8 0 39 7 1 2 8 0 0 'type' 8 0 82 7 1 2 6 1 d 8 0 1 7 1 2 8 0 82 7 1 2 6 8 integers 8 0 1 7 1 2 6 1 I 6 1 l 6 1 l 0 2 1
+8 0 52 0 0 0
+0 0 0
+8 0 15 7 1 2 8 0 0 'col' 7 1 2 6 1 x 8 0 1 7 1 2 0 2 0
+6 1 l 6 1 d 8 0 71 7 0 4 8 0 15 7 1 2 0 1 0
+6 1 J 8 0 36 7 1 2 6 1 J 6 7 len_int 8 0 15 7 1 2 8 0 1 7 1 2 6 1 J 0 1 0
+6 1 J 8 0 70 7 0 3 8 0 39 7 1 2 8 0 0 'type' 8 0 82 7 1 2 6 1 d 8 0 1 7 1 2 8 0 82 7 1 2 6 8 integers 8 0 1 7 1 2 6 1 J 6 1 l 6 1 l 0 2 1
+8 0 52 0 0 0
+0 0 0
+8 0 70 7 0 3 8 0 36 7 1 2 6 1 J 6 7 len_int 8 0 15 7 1 2 8 0 0 'delcols' 7 1 2 8 0 82 7 1 2 6 1 a 8 0 1 7 1 2 0 0 0
+6 1 l 8 0 1 7 1 2 0 2 0
+6 1 l 8 0 82 7 1 2 6 1 a 8 0 1 7 1 2 0 0 0
+6 1 l 0 0 0
+8 0 70 7 0 3 8 0 36 7 1 2 6 1 I 6 7 len_int 8 0 15 7 1 2 8 0 0 'delcols' 7 1 2 8 0 82 7 1 2 6 1 a 8 0 1 7 1 2 0 0 0
+6 1 l 8 0 1 7 1 2 0 1 0
+6 1 l 8 0 82 7 1 2 6 1 a 8 0 1 7 1 2 0 0 0
+6 1 l 0 0 0
+8 0 70 7 0 3 8 0 34 7 1 2 8 0 37 7 1 2 6 1 I 6 7 len_int 8 0 37 7 1 2 6 1 J 6 7 len_int 8 0 52 0 0 0
+0 0 0
+8 0 72 7 1 2 8 0 15 7 1 2 8 0 0 'col' 7 1 2 6 1 x 8 0 1 7 1 2 0 1 0
+6 1 l 6 1 x 8 0 71 7 0 4 8 0 15 7 1 2 0 1 0
+6 1 I 8 0 36 7 1 2 6 1 I 6 7 len_int 8 0 15 7 1 2 8 0 1 7 1 2 6 1 I 0 1 0
+6 1 I 8 0 70 7 0 3 8 0 39 7 1 2 8 0 0 'type' 8 0 82 7 1 2 6 1 x 8 0 1 7 1 2 8 0 82 7 1 2 6 8 integers 8 0 1 7 1 2 6 1 I 6 1 l 6 1 l 0 2 1
+8 0 52 0 0 0
+0 0 0
+8 0 70 7 0 3 8 0 37 7 1 2 6 1 I 6 7 len_int 8 0 52 0 0 0
+0 0 0
+8 0 15 7 1 2 8 0 82 7 1 2 6 1 a 8 0 28 7 1 2 8 0 1 7 1 2 0 2 0
+6 1 l 8 0 1 7 1 2 0 4 0
+6 1 l 7 1 3 6 1 a 6 2 bv 6 1 P 8 0 15 7 1 2 8 0 0 'dim' 6 1 a 6 1 d 8 0 15 7 1 2 8 0 0 'col' 7 1 2 6 1 a 8 0 1 7 1 2 8 0 82 7 1 2 6 1 d 8 0 1 7 1 2 0 2 0
+6 1 l 6 1 l 6 1 b 8 0 15 7 1 2 8 0 82 7 1 2 6 1 b 8 0 28 7 1 2 8 0 1 7 1 2 0 1 0
+6 1 l 8 0 1 7 1 3 8 0 82 7 1 2 6 1 d 8 0 1 7 1 2 0 1 0
+6 1 l 0 -1 0
+6 1 l 6 1 x 8 0 76 7 1 2 6 1 x 8 0 0 'floor' 6 1 x 8 0 15 7 1 2 8 0 82 7 1 2 6 1 a 8 0 1 7 1 2 8 0 0 'contains' 7 1 2 6 1 x 8 0 0 'max' 6 1 x 6 1 l 6 1 x 8 0 15 7 1 2 8 0 1 7 1 2 8 0 0 'floor' 6 1 x 8 0 2 6 1 x 6 1 x 8 0 71 7 0 4 8 0 15 7 1 2 8 0 1 7 1 2 8 0 82 7 1 2 6 1 d 8 0 1 7 1 2 0 2 0
+6 1 l 0 1 0
+6 1 I 8 0 38 7 1 2 6 1 I 8 0 1 7 1 3 8 0 82 7 1 2 6 1 d 8 0 1 7 1 2 0 2 0
+6 1 l 0 1 0
+8 0 2 6 3 ign 8 0 15 7 1 2 8 0 1 7 1 2 6 1 I 0 -1 0
+6 1 I 8 0 15 7 1 2 8 0 82 7 1 2 6 1 x 8 0 1 7 1 3 6 1 I 0 -1 0
+6 1 l 8 0 82 7 1 2 6 1 x 8 0 1 7 1 2 6 1 I 6 1 l 8 0 15 7 1 2 0 1 0
+8 0 82 7 1 2 6 1 x 8 0 1 7 1 3 8 0 82 7 1 2 6 1 d 8 0 1 7 1 2 0 2 0
+6 1 l 8 0 2 6 3 ign 6 1 l 8 0 15 7 1 2 8 0 1 7 1 2 8 0 82 7 1 2 6 1 d 8 0 1 7 1 2 0 2 0
+6 1 l 8 0 2 6 3 ign 8 0 82 7 1 2 6 2 bv 8 0 1 7 1 2 8 0 82 7 1 2 6 1 d 8 0 1 7 1 2 0 1 0
+6 1 l 6 1 l 8 0 15 7 1 2 8 0 81 7 1 2 6 7 addcol1 7 1 3 6 1 a 8 0 1 7 1 2 6 1 b 8 0 2 6 1 b 8 0 1 7 1 3 8 0 82 7 1 2 6 1 d 8 0 1 7 1 2 0 2 0
+6 1 l 8 0 2 6 3 ign 6 1 l 6 1 a 8 0 15 7 1 2 8 0 0 'insert' 7 1 3 6 1 a 8 0 1 7 1 2 8 0 82 7 1 2 6 1 d 8 0 1 7 1 2 0 1 0
+6 1 l 6 1 l 6 1 x 6 1 a 8 0 15 7 1 2 8 0 81 7 1 2 6 12 simplex_core 7 1 5 6 1 a 6 2 bv 0 0 0
+6 3 ign 6 1 P 6 1 a 8 0 43 6 1 a 6 11 simplex_int 8 0 15 7 1 2 8 0 73 7 1 3 7 1 1 6 1 a 7 1 1 0 0 0
+8 0 42 7 1 2 7 0 2 7 1 7 6 1 x 6 1 b 6 1 c 6 1 j 6 1 k 8 0 15 7 1 2 8 0 1 7 1 2 8 0 81 7 1 2 8 0 0 'dim' 6 1 a 0 2 0
+0 -1 0
+6 1 v 8 0 15 7 1 2 8 0 2 8 0 32 8 0 81 7 1 2 6 6 istart 7 1 0 6 1 l 7 1 0 7 32 4 8 0 15 7 1 2 8 0 0 'makelist' 6 1 v 6 1 x 8 0 15 7 1 2 8 0 0 'col' 7 1 2 6 1 a 8 0 1 7 1 2 0 0 0
+6 1 l 6 1 b 8 0 71 7 0 4 8 0 15 7 1 2 0 1 0
+6 1 j 8 0 36 7 1 2 6 1 j 6 1 v 8 0 15 7 1 2 8 0 1 7 1 2 6 1 j 0 1 0
+6 1 j 8 0 72 7 1 3 8 0 70 7 0 3 8 0 39 7 1 2 8 0 10 8 0 0 'transpose' 8 0 15 7 1 2 8 0 0 'col' 7 1 2 6 1 a 8 0 1 7 1 2 6 1 j 6 1 l 6 1 c 0 1 0
+8 0 53 0 0 0
+0 0 0
+8 0 70 7 0 3 8 0 74 7 1 2 8 0 15 7 1 2 8 0 0 'contains' 7 1 2 6 1 c 0 1 0
+6 1 k 0 0 0
+8 0 53 0 0 0
+0 0 0
+8 0 70 7 0 3 8 0 82 7 1 2 6 1 b 8 0 1 7 1 2 6 1 k 6 1 l 8 0 72 7 1 2 8 0 15 7 1 2 8 0 82 7 1 2 6 1 b 8 0 1 7 1 2 6 1 k 6 1 l 8 0 82 7 1 2 6 1 x 8 0 1 7 1 2 6 1 j 6 1 l 8 0 15 7 1 2 0 0 0
+8 0 82 7 1 2 6 1 b 8 0 1 7 1 2 6 1 k 6 1 l 0 0 0
+8 0 43 6 1 x 6 3 sol 8 0 15 7 1 2 8 0 73 7 1 3 7 1 1 6 1 p 7 1 1 0 0 0
+8 0 42 7 1 2 7 0 2 7 1 3 8 0 15 7 1 2 8 0 0 'dim' 6 1 p 6 1 d 8 0 15 7 1 2 8 0 81 7 1 2 6 9 pureCheck 6 1 p 6 1 r 8 0 15 7 1 2 8 0 2 8 0 32 8 0 81 7 1 2 6 6 istart 7 1 0 6 1 l 7 1 0 7 32 7 8 0 70 7 0 3 8 0 39 7 1 2 8 0 0 'dim' 8 0 82 7 1 2 6 1 r 8 0 1 7 1 2 0 2 0
+6 1 l 0 1 0
+8 0 43 6 1 r 0 0 0
+8 0 70 7 0 3 8 0 74 7 1 2 6 1 d 7 0 2 0 2 0
+0 2 0
+8 0 43 8 0 81 7 1 2 6 8 twobytwo 6 1 p 0 0 0
+8 0 15 7 1 2 8 0 81 7 1 2 6 9 dominance 6 1 p 6 1 p 8 0 70 7 0 3 8 0 74 7 1 2 8 0 0 'dim' 8 0 82 7 1 2 6 1 p 8 0 1 7 1 2 0 1 0
+6 1 l 7 0 2 0 2 0
+0 2 0
+8 0 72 7 1 5 8 0 15 7 1 2 8 0 81 7 1 2 6 8 twobytwo 8 0 82 7 1 2 6 1 p 0 1 0
+6 1 d 8 0 15 7 1 2 8 0 81 7 1 2 6 11 insertZeros 7 1 4 8 0 0 'col' 7 1 2 8 0 82 7 1 2 6 1 d 8 0 1 7 1 2 0 2 0
+6 1 l 0 1 0
+8 0 0 'col' 7 1 2 8 0 82 7 1 2 6 1 d 8 0 1 7 1 2 0 3 0
+6 1 l 0 1 0
+8 0 82 7 1 2 6 1 p 8 0 1 7 1 2 0 2 0
+6 1 l 8 0 82 7 1 2 6 1 p 8 0 1 7 1 2 0 3 0
+6 1 l 8 0 82 7 1 2 6 1 d 8 0 28 7 1 2 8 0 1 7 1 2 0 2 0
+6 1 l 8 0 1 7 1 2 0 3 0
+6 1 l 8 0 15 7 1 2 8 0 0 'transpose' 8 0 82 7 1 2 6 1 d 8 0 1 7 1 2 0 2 0
+6 1 l 8 0 82 7 1 2 6 1 d 8 0 1 7 1 2 0 2 0
+6 1 l 8 0 15 7 1 2 8 0 0 'transpose' 8 0 82 7 1 2 6 1 d 8 0 1 7 1 2 0 3 0
+6 1 l 8 0 82 7 1 2 6 1 d 8 0 1 7 1 2 0 3 0
+6 1 l 8 0 43 6 1 d 0 0 0
+8 0 15 7 1 2 8 0 81 7 1 2 6 12 simplex_game 8 0 82 7 1 2 6 1 p 8 0 1 7 1 2 0 1 0
+6 1 l 6 1 r 8 0 70 7 0 3 8 0 34 7 1 2 8 0 37 7 1 2 8 0 0 'len' 8 0 82 7 1 2 6 1 p 8 0 1 7 1 2 0 2 0
+6 1 l 0 0 0
+8 0 37 7 1 2 8 0 0 'len' 8 0 82 7 1 2 6 1 p 8 0 1 7 1 2 0 3 0
+6 1 l 0 0 0
+8 0 72 7 1 3 8 0 15 7 1 2 8 0 81 7 1 2 6 11 insertZeros 7 1 4 8 0 0 'col' 7 1 2 8 0 82 7 1 2 6 1 r 8 0 1 7 1 2 0 2 0
+6 1 l 0 1 0
+8 0 0 'col' 7 1 2 8 0 82 7 1 2 6 1 r 8 0 1 7 1 2 0 3 0
+6 1 l 0 1 0
+8 0 82 7 1 2 6 1 p 8 0 1 7 1 2 0 2 0
+6 1 l 8 0 82 7 1 2 6 1 p 8 0 1 7 1 2 0 3 0
+6 1 l 8 0 82 7 1 2 6 1 r 8 0 28 7 1 2 8 0 1 7 1 2 0 2 0
+6 1 l 8 0 1 7 1 2 0 3 0
+6 1 l 8 0 15 7 1 2 8 0 0 'transpose' 8 0 82 7 1 2 6 1 r 8 0 1 7 1 2 0 2 0
+6 1 l 8 0 82 7 1 2 6 1 r 8 0 1 7 1 2 0 2 0
+6 1 l 8 0 15 7 1 2 8 0 0 'transpose' 8 0 82 7 1 2 6 1 r 8 0 1 7 1 2 0 3 0
+6 1 l 8 0 82 7 1 2 6 1 r 8 0 1 7 1 2 0 3 0
+6 1 l 0 0 0
+8 0 43 6 1 r 6 9 solveGame 8 0 15 7 1 2 8 0 73 7 1 3 7 1 0 7 1 0 8 0 42 7 1 2 7 0 2 7 1 2 6 8 expected 6 6 result 7 1 0 7 32 3 8 0 15 7 1 2 8 0 0 'copy' 7 0 5 0 35 0
+7 0 4 7 0 8 0 1 0
+8 0 5 7 1 2 0 1 0
+0 2 0
+8 0 5 7 1 2 0 1 0
+0 2 0
+0 0 0
+8 0 5 7 1 2 0 3 0
+0 4 0
+0 0 0
+8 0 5 7 1 2 0 -1 0
+0 4 0
+0 5 0
+7 0 8 0 0 0
+0 0 0
+0 0 0
+0 0 0
+8 0 5 7 1 2 0 -3 0
+0 2 0
+0 1 0
+8 0 5 7 1 2 0 1 0
+0 2 0
+0 0 0
+7 0 8 0 0 0
+8 0 5 7 1 2 0 3 0
+0 2 0
+8 0 5 7 1 2 0 -1 0
+0 2 0
+0 1 0
+8 0 5 7 1 2 0 1 0
+0 4 0
+0 0 0
+8 0 5 7 1 2 0 1 0
+0 4 0
+0 15 0
+7 0 8 0 0 0
+8 0 5 7 1 2 0 1 0
+0 2 0
+8 0 5 7 1 2 0 7 0
+0 2 0
+0 0 0
+8 0 5 7 1 2 0 -5 0
+0 4 0
+0 0 0
+8 0 5 7 1 2 0 -1 0
+0 4 0
+0 -35 0
+7 0 3 0 1 0
+0 6 0
+0 4 0
+0 3 0
+7 0 7 7 0 1 0 5 0
+7 0 1 0 0 0
+7 0 1 0 0 0
+7 0 1 0 15 0
+7 0 1 0 0 0
+7 0 1 0 0 0
+7 0 1 0 0 0
+6 8 expected 8 0 15 7 1 2 8 0 81 7 1 2 6 7 simplex 7 1 2 7 0 4 7 0 5 0 1 0
+0 2 0
+0 0 0
+0 1 0
+0 20 0
+7 0 5 0 2 0
+0 1 0
+0 1 0
+0 0 0
+0 10 0
+7 0 5 0 -1 0
+0 4 0
+0 -2 0
+0 3 0
+0 40 0
+7 0 5 0 1 0
+0 4 0
+0 3 0
+0 2 0
+0 0 0
+0 -3 0
+6 6 result 8 0 43 8 0 74 7 1 2 8 0 0 'sum' 8 0 10 8 0 1 7 1 2 6 8 expected 8 0 2 6 6 result 0 0 0
+6 6 test01 8 0 15 7 1 2 8 0 73 7 1 3 7 1 0 7 1 0 8 0 42 7 1 2 7 0 2 7 1 2 6 8 expected 6 6 result 7 1 0 7 32 3 8 0 15 7 1 2 8 0 0 'copy' 7 0 5 8 0 5 7 1 2 0 320 0
+0 7 0
+7 0 4 7 0 9 0 0 0
+0 1 0
+0 0 0
+8 0 5 7 1 2 0 4 0
+0 7 0
+8 0 5 7 1 2 0 -3 0
+0 7 0
+0 0 0
+8 0 5 7 1 2 0 -4 0
+0 7 0
+8 0 5 7 1 2 0 3 0
+0 7 0
+8 0 5 7 1 2 0 40 0
+0 7 0
+7 0 9 0 1 0
+0 0 0
+0 0 0
+8 0 5 7 1 2 0 -5 0
+0 7 0
+8 0 5 7 1 2 0 2 0
+0 7 0
+0 0 0
+8 0 5 7 1 2 0 5 0
+0 7 0
+8 0 5 7 1 2 0 -2 0
+0 7 0
+8 0 5 7 1 2 0 20 0
+0 7 0
+7 0 9 0 0 0
+0 0 0
+0 1 0
+8 0 5 7 1 2 0 6 0
+0 7 0
+8 0 5 7 1 2 0 -8 0
+0 7 0
+0 -1 0
+8 0 5 7 1 2 0 -6 0
+0 7 0
+8 0 5 7 1 2 0 8 0
+0 7 0
+8 0 5 7 1 2 0 46 0
+0 7 0
+7 0 9 0 0 0
+0 0 0
+0 0 0
+8 0 5 7 1 2 0 10 0
+0 7 0
+8 0 5 7 1 2 0 3 0
+0 7 0
+0 0 0
+8 0 5 7 1 2 0 -10 0
+0 7 0
+8 0 5 7 1 2 0 -3 0
+0 7 0
+8 0 5 7 1 2 0 -320 0
+0 7 0
+7 0 3 0 2 0
+0 1 0
+0 3 0
+0 3 0
+7 0 8 7 0 1 8 0 5 7 1 2 0 20 0
+0 7 0
+7 0 1 8 0 5 7 1 2 0 40 0
+0 7 0
+7 0 1 8 0 5 7 1 2 0 46 0
+0 7 0
+7 0 1 0 0 0
+7 0 1 0 0 0
+7 0 1 0 0 0
+7 0 1 0 0 0
+7 0 1 0 0 0
+6 8 expected 8 0 15 7 1 2 8 0 81 7 1 2 6 7 simplex 7 1 2 7 0 4 7 0 3 0 2 0
+0 4 0
+0 22 0
+7 0 3 0 3 0
+0 2 0
+0 20 0
+7 0 3 0 4 0
+0 5 0
+0 40 0
+7 0 3 0 6 0
+0 5 0
+0 0 0
+7 0 2 6 5 lpmin 0 3 0
+6 6 result 8 0 43 8 0 74 7 1 2 8 0 0 'sum' 8 0 10 8 0 1 7 1 2 6 8 expected 8 0 2 6 6 result 0 0 0
+6 6 test02 8 0 15 7 1 2 8 0 73 7 1 3 7 1 0 7 1 0 8 0 42 7 1 2 7 0 2 7 1 2 6 8 expected 6 6 result 7 1 0 7 32 3 8 0 15 7 1 2 8 0 0 'copy' 7 0 5 8 0 5 7 1 2 0 320 0
+0 7 0
+7 0 4 7 0 6 0 0 0
+0 0 0
+0 1 0
+8 0 5 7 1 2 0 6 0
+0 7 0
+8 0 5 7 1 2 0 -8 0
+0 7 0
+8 0 5 7 1 2 0 46 0
+0 7 0
+7 0 6 0 1 0
+0 0 0
+0 0 0
+8 0 5 7 1 2 0 -5 0
+0 7 0
+8 0 5 7 1 2 0 2 0
+0 7 0
+8 0 5 7 1 2 0 20 0
+0 7 0
+7 0 6 0 0 0
+0 1 0
+0 0 0
+8 0 5 7 1 2 0 4 0
+0 7 0
+8 0 5 7 1 2 0 -3 0
+0 7 0
+8 0 5 7 1 2 0 40 0
+0 7 0
+7 0 6 0 0 0
+0 0 0
+0 0 0
+8 0 5 7 1 2 0 10 0
+0 7 0
+8 0 5 7 1 2 0 3 0
+0 7 0
+8 0 5 7 1 2 0 -320 0
+0 7 0
+7 0 3 0 3 0
+0 1 0
+0 2 0
+0 2 0
+7 0 5 7 0 1 8 0 5 7 1 2 0 20 0
+0 7 0
+7 0 1 8 0 5 7 1 2 0 40 0
+0 7 0
+7 0 1 8 0 5 7 1 2 0 46 0
+0 7 0
+7 0 1 0 0 0
+7 0 1 0 0 0
+6 8 expected 8 0 15 7 1 2 8 0 81 7 1 2 6 7 simplex 7 0 4 7 0 3 0 -2 0
+0 -4 0
+0 -22 0
+7 0 3 0 -3 0
+0 -2 0
+0 -20 0
+7 0 3 0 -4 0
+0 -5 0
+0 -40 0
+7 0 3 0 6 0
+0 5 0
+0 0 0
+6 6 result 8 0 43 8 0 74 7 1 2 8 0 0 'sum' 8 0 10 8 0 1 7 1 2 6 8 expected 8 0 2 6 6 result 0 0 0
+6 6 test03 8 0 15 7 1 2 8 0 73 7 1 3 7 1 0 7 1 0 8 0 42 7 1 2 7 0 2 7 1 2 6 8 expected 6 6 result 7 1 0 7 32 3 8 0 15 7 1 2 8 0 0 'copy' 7 0 5 8 0 5 7 1 2 0 -130 0
+0 7 0
+7 0 3 7 0 6 0 1 0
+8 0 5 7 1 2 0 1 0
+0 7 0
+0 0 0
+8 0 5 7 1 2 0 3 0
+0 7 0
+8 0 5 7 1 2 0 -1 0
+0 7 0
+8 0 5 7 1 2 0 15 0
+0 7 0
+7 0 6 0 0 0
+8 0 5 7 1 2 0 11 0
+0 7 0
+0 1 0
+8 0 5 7 1 2 0 -2 0
+0 7 0
+8 0 5 7 1 2 0 3 0
+0 7 0
+8 0 5 7 1 2 0 25 0
+0 7 0
+7 0 6 0 0 0
+8 0 5 7 1 2 0 25 0
+0 7 0
+0 0 0
+8 0 5 7 1 2 0 -2 0
+0 7 0
+8 0 5 7 1 2 0 10 0
+0 7 0
+8 0 5 7 1 2 0 130 0
+0 7 0
+7 0 2 0 1 0
+0 3 0
+0 3 0
+7 0 5 7 0 1 8 0 5 7 1 2 0 15 0
+0 7 0
+7 0 1 0 0 0
+7 0 1 8 0 5 7 1 2 0 25 0
+0 7 0
+7 0 1 0 0 0
+7 0 1 0 0 0
+6 8 expected 8 0 15 7 1 2 8 0 81 7 1 2 6 7 simplex 7 1 2 7 0 3 7 0 4 0 3 0
+0 2 0
+0 1 0
+0 10 0
+7 0 4 0 2 0
+0 5 0
+0 3 0
+0 15 0
+7 0 4 0 -2 0
+0 -3 0
+0 -4 0
+0 0 0
+0 -2 0
+6 6 result 8 0 43 8 0 74 7 1 2 8 0 0 'sum' 8 0 10 8 0 1 7 1 2 6 8 expected 8 0 2 6 6 result 0 0 0
+6 6 test04 8 0 15 7 1 2 8 0 73 7 1 3 7 1 0 7 1 0 8 0 42 7 1 2 7 0 2 7 1 2 6 8 expected 6 6 result 7 1 0 7 32 3 8 0 15 7 1 2 8 0 0 'copy' 7 0 5 8 0 5 7 1 2 0 1441 0
+0 17 0
+7 0 4 7 0 11 0 1 0
+0 0 0
+8 0 5 7 1 2 0 1 0
+0 17 0
+0 0 0
+0 0 0
+8 0 5 7 1 2 0 32 0
+0 85 0
+8 0 5 7 1 2 0 -1 0
+0 17 0
+8 0 5 7 1 2 0 32 0
+0 85 0
+8 0 5 7 1 2 0 1 0
+0 17 0
+8 0 5 7 1 2 0 -8 0
+0 85 0
+8 0 5 7 1 2 0 131 0
+0 85 0
+7 0 11 0 0 0
+0 1 0
+8 0 5 7 1 2 0 3 0
+0 17 0
+0 0 0
+0 0 0
+8 0 5 7 1 2 0 28 0
+0 85 0
+8 0 5 7 1 2 0 -3 0
+0 17 0
+8 0 5 7 1 2 0 28 0
+0 85 0
+8 0 5 7 1 2 0 3 0
+0 17 0
+8 0 5 7 1 2 0 -7 0
+0 85 0
+8 0 5 7 1 2 0 189 0
+0 85 0
+7 0 11 0 0 0
+0 0 0
+8 0 5 7 1 2 0 -1 0
+0 17 0
+0 1 0
+0 -1 0
+8 0 5 7 1 2 0 -3 0
+0 17 0
+8 0 5 7 1 2 0 1 0
+0 17 0
+8 0 5 7 1 2 0 -3 0
+0 17 0
+8 0 5 7 1 2 0 -1 0
+0 17 0
+8 0 5 7 1 2 0 5 0
+0 17 0
+8 0 5 7 1 2 0 35 0
+0 17 0
+7 0 11 0 0 0
+0 0 0
+8 0 5 7 1 2 0 13 0
+0 17 0
+0 0 0
+0 0 0
+8 0 5 7 1 2 0 5 0
+0 17 0
+8 0 5 7 1 2 0 4 0
+0 17 0
+8 0 5 7 1 2 0 5 0
+0 17 0
+8 0 5 7 1 2 0 -4 0
+0 17 0
+8 0 5 7 1 2 0 3 0
+0 17 0
+8 0 5 7 1 2 0 -1441 0
+0 17 0
+7 0 3 0 1 0
+0 2 0
+0 4 0
+0 3 0
+7 0 10 7 0 1 8 0 5 7 1 2 0 131 0
+0 85 0
+7 0 1 8 0 5 7 1 2 0 189 0
+0 85 0
+7 0 1 0 0 0
+7 0 1 8 0 5 7 1 2 0 35 0
+0 17 0
+7 0 1 0 0 0
+7 0 1 0 0 0
+7 0 1 0 0 0
+7 0 1 0 0 0
+7 0 1 0 0 0
+7 0 1 0 0 0
+6 8 expected 8 0 15 7 1 2 8 0 81 7 1 2 6 7 simplex 7 1 2 7 0 4 7 0 8 0 4 0
+0 -1 0
+0 0 0
+0 1 0
+0 -1 0
+0 1 0
+0 0 0
+0 6 0
+7 0 8 0 -7 0
+0 8 0
+0 1 0
+0 0 0
+0 0 0
+0 0 0
+0 -1 0
+0 7 0
+7 0 8 0 1 0
+0 1 0
+0 0 0
+0 4 0
+0 -4 0
+0 0 0
+0 0 0
+0 12 0
+7 0 8 0 -3 0
+0 2 0
+0 1 0
+0 -1 0
+0 1 0
+0 0 0
+0 0 0
+0 -87 0
+0 -3 0
+6 6 result 8 0 43 8 0 74 7 1 2 8 0 0 'sum' 8 0 10 8 0 1 7 1 2 6 8 expected 8 0 2 6 6 result 0 0 0
+6 6 test05 8 0 15 7 1 2 8 0 73 7 1 3 7 1 0 7 1 0 8 0 42 7 1 2 7 0 2 7 1 2 6 8 expected 6 6 result 7 1 0 7 32 3 8 0 15 7 1 2 8 0 0 'copy' 7 0 5 8 0 5 7 1 2 0 320 0
+0 7 0
+7 0 3 7 0 6 8 0 5 7 1 2 0 -6 0
+0 7 0
+0 1 0
+0 0 0
+8 0 5 7 1 2 0 5 0
+0 7 0
+8 0 5 7 1 2 0 -4 0
+0 7 0
+8 0 5 7 1 2 0 10 0
+0 7 0
+7 0 6 8 0 5 7 1 2 0 8 0
+0 7 0
+0 0 0
+0 1 0
+8 0 5 7 1 2 0 -2 0
+0 7 0
+8 0 5 7 1 2 0 3 0
+0 7 0
+8 0 5 7 1 2 0 3 0
+0 7 0
+7 0 6 8 0 5 7 1 2 0 46 0
+0 7 0
+0 0 0
+0 0 0
+8 0 5 7 1 2 0 20 0
+0 7 0
+8 0 5 7 1 2 0 40 0
+0 7 0
+8 0 5 7 1 2 0 320 0
+0 7 0
+7 0 2 0 2 0
+0 3 0
+0 2 0
+7 0 5 7 0 1 0 0 0
+7 0 1 8 0 5 7 1 2 0 10 0
+0 7 0
+7 0 1 8 0 5 7 1 2 0 3 0
+0 7 0
+7 0 1 0 0 0
+7 0 1 0 0 0
+6 8 expected 8 0 15 7 1 2 8 0 81 7 1 2 6 7 simplex 7 1 2 7 0 3 7 0 4 0 2 0
+0 3 0
+0 4 0
+0 6 0
+7 0 4 0 4 0
+0 2 0
+0 5 0
+0 5 0
+7 0 4 0 22 0
+0 20 0
+0 40 0
+0 0 0
+6 5 lpmax 6 6 result 8 0 43 8 0 74 7 1 2 8 0 0 'sum' 8 0 10 8 0 1 7 1 2 6 8 expected 8 0 2 6 6 result 0 0 0
+6 6 test06 8 0 15 7 1 2 8 0 73 7 1 3 7 1 0 7 1 0 8 0 42 7 1 2 7 0 2 7 1 2 6 8 expected 6 6 result 7 1 0 7 32 3 8 0 15 7 1 2 8 0 0 'copy' 7 0 5 0 12 0
+7 0 4 7 0 6 0 1 0
+0 0 0
+0 0 0
+0 -1 0
+0 1 0
+0 1 0
+7 0 6 0 0 0
+0 0 0
+0 1 0
+0 -2 0
+0 1 0
+0 6 0
+7 0 6 0 0 0
+0 1 0
+0 0 0
+0 -3 0
+0 2 0
+0 2 0
+7 0 6 0 0 0
+0 0 0
+0 0 0
+0 17 0
+0 -12 0
+0 -12 0
+7 0 3 0 1 0
+0 3 0
+0 2 0
+0 2 0
+7 0 5 7 0 1 0 1 0
+7 0 1 0 2 0
+7 0 1 0 6 0
+7 0 1 0 0 0
+7 0 1 0 0 0
+6 8 expected 8 0 15 7 1 2 8 0 81 7 1 2 6 7 simplex 7 1 3 7 0 3 7 0 3 0 3 0
+0 -1 0
+0 1 0
+7 0 3 0 1 0
+0 -1 0
+0 5 0
+7 0 3 0 2 0
+0 5 0
+0 0 0
+0 -1 0
+7 0 2 0 1 0
+0 2 0
+6 6 result 8 0 43 8 0 74 7 1 2 8 0 0 'sum' 8 0 10 8 0 1 7 1 2 6 8 expected 8 0 2 6 6 result 0 0 0
+6 6 test07 8 0 15 7 1 2 8 0 73 7 1 3 7 1 0 7 1 0 8 0 42 7 1 2 7 0 2 7 1 2 6 8 expected 6 6 result 7 1 0 7 32 3 8 0 15 7 1 2 8 0 0 'copy' 7 0 5 0 -10 0
+7 0 4 7 0 7 0 0 0
+0 1 0
+0 1 0
+0 0 0
+0 0 0
+0 1 0
+0 3 0
+7 0 7 0 0 0
+0 -1 0
+0 0 0
+0 -2 0
+0 1 0
+0 3 0
+0 6 0
+7 0 7 0 1 0
+0 1 0
+0 0 0
+0 1 0
+0 0 0
+0 -2 0
+0 1 0
+7 0 7 0 0 0
+0 1 0
+0 0 0
+0 1 0
+0 0 0
+0 1 0
+0 10 0
+7 0 3 0 3 0
+0 5 0
+0 1 0
+0 3 0
+7 0 6 7 0 1 0 1 0
+7 0 1 0 0 0
+7 0 1 0 3 0
+7 0 1 0 0 0
+7 0 1 0 6 0
+7 0 1 0 0 0
+6 8 expected 8 0 15 7 1 2 8 0 81 7 1 2 6 7 simplex 7 1 3 7 0 3 7 0 4 0 1 0
+0 3 0
+0 2 0
+0 7 0
+7 0 4 0 2 0
+0 2 0
+0 1 0
+0 11 0
+7 0 4 0 -1 0
+0 -3 0
+0 -3 0
+0 0 0
+6 5 lpmin 7 0 2 0 1 0
+0 3 0
+6 6 result 8 0 43 8 0 74 7 1 2 8 0 0 'sum' 8 0 10 8 0 1 7 1 2 6 8 expected 8 0 2 6 6 result 0 0 0
+6 6 test08 8 0 15 7 1 2 8 0 73 7 1 3 7 1 0 7 1 0 8 0 42 7 1 2 7 0 2 7 1 2 6 8 expected 6 6 result 7 1 0 7 32 3 8 0 15 7 1 2 8 0 0 'copy' 7 0 5 0 -41 0
+7 0 11 7 0 13 0 1 0
+0 0 0
+0 0 0
+0 0 0
+0 0 0
+0 0 0
+0 0 0
+0 0 0
+0 0 0
+0 0 0
+8 0 5 7 1 2 0 -5 0
+0 12 0
+8 0 5 7 1 2 0 1 0
+0 4 0
+0 4 0
+7 0 13 0 0 0
+0 1 0
+0 0 0
+0 0 0
+0 0 0
+0 0 0
+0 0 0
+0 0 0
+0 0 0
+0 0 0
+8 0 5 7 1 2 0 1 0
+0 3 0
+0 0 0
+0 3 0
+7 0 13 0 0 0
+0 0 0
+0 0 0
+0 0 0
+0 0 0
+0 0 0
+0 1 0
+0 0 0
+0 0 0
+0 0 0
+8 0 5 7 1 2 0 -1 0
+0 6 0
+8 0 5 7 1 2 0 -1 0
+0 2 0
+0 1 0
+7 0 13 0 0 0
+0 0 0
+0 0 0
+0 0 0
+0 1 0
+0 0 0
+0 0 0
+0 0 0
+0 0 0
+0 0 0
+0 -1 0
+0 0 0
+0 1 0
+7 0 13 0 0 0
+0 0 0
+0 0 0
+0 0 0
+0 0 0
+0 1 0
+0 0 0
+0 0 0
+0 0 0
+0 0 0
+8 0 5 7 1 2 0 -7 0
+0 12 0
+8 0 5 7 1 2 0 -1 0
+0 4 0
+0 1 0
+7 0 13 0 0 0
+0 0 0
+0 1 0
+0 0 0
+0 0 0
+0 0 0
+0 0 0
+0 0 0
+0 0 0
+0 0 0
+8 0 5 7 1 2 0 31 0
+0 12 0
+8 0 5 7 1 2 0 -7 0
+0 4 0
+0 4 0
+7 0 13 0 0 0
+0 0 0
+0 0 0
+0 0 0
+0 0 0
+0 0 0
+0 0 0
+0 1 0
+0 0 0
+0 0 0
+8 0 5 7 1 2 0 9 0
+0 4 0
+8 0 5 7 1 2 0 -7 0
+0 4 0
+0 3 0
+7 0 13 0 0 0
+0 0 0
+0 0 0
+0 0 0
+0 0 0
+0 0 0
+0 0 0
+0 0 0
+0 1 0
+0 0 0
+8 0 5 7 1 2 0 2 0
+0 3 0
+0 -1 0
+0 1 0
+7 0 13 0 0 0
+0 0 0
+0 0 0
+0 1 0
+0 0 0
+0 0 0
+0 0 0
+0 0 0
+0 0 0
+0 0 0
+8 0 5 7 1 2 0 -17 0
+0 12 0
+8 0 5 7 1 2 0 1 0
+0 4 0
+0 1 0
+7 0 13 0 0 0
+0 0 0
+0 0 0
+0 0 0
+0 0 0
+0 0 0
+0 0 0
+0 0 0
+0 0 0
+0 1 0
+8 0 5 7 1 2 0 5 0
+0 12 0
+8 0 5 7 1 2 0 -5 0
+0 4 0
+0 1 0
+7 0 13 0 0 0
+0 0 0
+0 0 0
+0 0 0
+0 0 0
+0 0 0
+0 0 0
+0 0 0
+0 0 0
+0 0 0
+8 0 5 7 1 2 0 1 0
+0 4 0
+8 0 5 7 1 2 0 5 0
+0 4 0
+0 41 0
+7 0 10 0 1 0
+0 2 0
+0 7 0
+0 5 0
+0 6 0
+0 3 0
+0 8 0
+0 9 0
+0 4 0
+0 10 0
+0 11 0
+7 0 12 7 0 1 0 4 0
+7 0 1 0 3 0
+7 0 1 0 4 0
+7 0 1 0 1 0
+7 0 1 0 1 0
+7 0 1 0 1 0
+7 0 1 0 1 0
+7 0 1 0 3 0
+7 0 1 0 1 0
+7 0 1 0 1 0
+7 0 1 0 0 0
+7 0 1 0 0 0
+6 8 expected 8 0 15 7 1 2 8 0 81 7 1 2 6 7 simplex 7 1 3 7 0 3 7 0 3 0 7 0
+0 1 0
+0 35 0
+7 0 3 0 -1 0
+0 3 0
+0 6 0
+7 0 3 0 -5 0
+0 -7 0
+0 0 0
+6 5 lpmin 7 0 2 0 1 0
+0 2 0
+6 6 result 8 0 43 8 0 74 7 1 2 8 0 0 'sum' 8 0 10 8 0 1 7 1 2 6 8 expected 8 0 2 6 6 result 0 0 0
+6 6 test09 8 0 15 7 1 2 8 0 73 7 1 3 7 1 0 7 1 0 8 0 42 7 1 2 7 0 2 7 1 2 6 8 expected 6 6 result 7 1 0 7 32 3 8 0 15 7 1 2 8 0 0 'copy' 7 0 5 0 18 0
+7 0 2 7 0 4 0 1 0
+0 1 0
+0 1 0
+0 6 0
+7 0 4 0 0 0
+0 1 0
+0 3 0
+0 18 0
+7 0 1 0 1 0
+0 1 0
+7 0 3 7 0 1 0 6 0
+7 0 1 0 0 0
+7 0 1 0 0 0
+6 8 expected 8 0 15 7 1 2 8 0 81 7 1 2 6 7 simplex 7 1 3 7 0 2 7 0 3 0 1 0
+0 1 0
+0 6 0
+7 0 3 0 3 0
+0 2 0
+0 0 0
+6 5 lpmax 7 0 2 0 1 0
+0 2 0
+6 6 result 8 0 43 8 0 74 7 1 2 8 0 0 'sum' 8 0 10 8 0 1 7 1 2 6 8 expected 8 0 2 6 6 result 0 0 0
+6 6 test10 8 0 15 7 1 2 8 0 73 7 1 3 7 1 0 7 1 0 8 0 42 7 1 2 7 0 2 7 1 2 6 8 expected 6 6 result 7 1 0 7 32 3 8 0 15 7 1 2 8 0 0 'copy' 7 0 5 0 58 0
+7 0 11 7 0 13 0 0 0
+0 1 0
+0 1 0
+0 0 0
+0 0 0
+0 0 0
+0 0 0
+0 0 0
+0 0 0
+0 0 0
+0 0 0
+0 -1 0
+0 4 0
+7 0 13 0 1 0
+0 0 0
+0 -4 0
+0 0 0
+0 0 0
+0 0 0
+0 0 0
+0 0 0
+0 0 0
+0 0 0
+0 0 0
+8 0 5 7 1 2 0 9 0
+0 2 0
+0 2 0
+7 0 13 0 0 0
+0 0 0
+0 52 0
+0 1 0
+0 0 0
+0 0 0
+0 0 0
+0 0 0
+0 0 0
+0 0 0
+0 0 0
+8 0 5 7 1 2 0 -115 0
+0 2 0
+0 92 0
+7 0 13 0 0 0
+0 0 0
+0 51 0
+0 0 0
+0 1 0
+0 0 0
+0 0 0
+0 0 0
+0 0 0
+0 0 0
+0 0 0
+8 0 5 7 1 2 0 -113 0
+0 2 0
+0 90 0
+7 0 13 0 0 0
+0 0 0
+0 50 0
+0 0 0
+0 0 0
+0 1 0
+0 0 0
+0 0 0
+0 0 0
+0 0 0
+0 0 0
+8 0 5 7 1 2 0 -111 0
+0 2 0
+0 88 0
+7 0 13 0 0 0
+0 0 0
+0 48 0
+0 0 0
+0 0 0
+0 0 0
+0 1 0
+0 0 0
+0 0 0
+0 0 0
+0 0 0
+8 0 5 7 1 2 0 -107 0
+0 2 0
+0 84 0
+7 0 13 0 0 0
+0 0 0
+0 46 0
+0 0 0
+0 0 0
+0 0 0
+0 0 0
+0 1 0
+0 0 0
+0 0 0
+0 0 0
+8 0 5 7 1 2 0 -103 0
+0 2 0
+0 80 0
+7 0 13 0 0 0
+0 0 0
+0 4 0
+0 0 0
+0 0 0
+0 0 0
+0 0 0
+0 0 0
+0 1 0
+0 0 0
+0 0 0
+8 0 5 7 1 2 0 -9 0
+0 2 0
+0 6 0
+7 0 13 0 0 0
+0 0 0
+0 3 0
+0 0 0
+0 0 0
+0 0 0
+0 0 0
+0 0 0
+0 0 0
+0 1 0
+0 0 0
+8 0 5 7 1 2 0 -7 0
+0 2 0
+0 4 0
+7 0 13 0 0 0
+0 0 0
+0 2 0
+0 0 0
+0 0 0
+0 0 0
+0 0 0
+0 0 0
+0 0 0
+0 0 0
+0 1 0
+8 0 5 7 1 2 0 -5 0
+0 2 0
+0 2 0
+7 0 13 0 0 0
+0 0 0
+0 1 0
+0 0 0
+0 0 0
+0 0 0
+0 0 0
+0 0 0
+0 0 0
+0 0 0
+0 0 0
+8 0 5 7 1 2 0 1 0
+0 2 0
+0 58 0
+7 0 10 0 2 0
+0 1 0
+0 4 0
+0 5 0
+0 6 0
+0 7 0
+0 8 0
+0 9 0
+0 10 0
+0 11 0
+0 10 0
+7 0 12 7 0 1 0 2 0
+7 0 1 0 4 0
+7 0 1 0 0 0
+7 0 1 0 92 0
+7 0 1 0 90 0
+7 0 1 0 88 0
+7 0 1 0 84 0
+7 0 1 0 80 0
+7 0 1 0 6 0
+7 0 1 0 4 0
+7 0 1 0 2 0
+7 0 1 0 0 0
+6 8 expected 8 0 15 7 1 2 8 0 81 7 1 2 6 7 simplex 7 1 3 7 0 3 7 0 3 0 2 0
+0 9 0
+0 40 0
+7 0 3 0 11 0
+0 -8 0
+0 82 0
+7 0 3 0 3 0
+0 13 0
+0 0 0
+6 5 lpmax 7 0 2 0 1 0
+0 2 0
+6 6 result 8 0 43 8 0 74 7 1 2 8 0 0 'sum' 8 0 10 8 0 1 7 1 2 6 8 expected 8 0 2 6 6 result 0 0 0
+6 6 test11 8 0 15 7 1 2 8 0 73 7 1 3 7 1 0 7 1 0 8 0 42 7 1 2 7 0 2 7 1 2 6 8 expected 6 6 result 7 1 0 7 32 3 8 0 15 7 1 2 8 0 0 'copy' 7 0 5 0 33 0
+7 0 4 7 0 7 0 1 0
+0 -1 0
+0 0 0
+0 1 0
+0 0 0
+0 0 0
+0 12 0
+7 0 7 0 0 0
+0 0 0
+0 1 0
+0 0 0
+0 0 0
+0 1 0
+0 9 0
+7 0 7 0 0 0
+0 2 0
+0 0 0
+0 0 0
+0 1 0
+0 -3 0
+0 1 0
+7 0 7 0 0 0
+0 2 0
+0 0 0
+0 2 0
+0 0 0
+0 1 0
+0 33 0
+7 0 3 0 1 0
+0 3 0
+0 5 0
+0 3 0
+7 0 6 7 0 1 0 12 0
+7 0 1 0 0 0
+7 0 1 0 9 0
+7 0 1 0 0 0
+7 0 1 0 1 0
+7 0 1 0 0 0
+6 8 expected 8 0 15 7 1 2 8 0 81 7 1 2 6 7 simplex 7 1 3 7 0 3 7 0 4 0 1 0
+0 -1 0
+0 0 0
+0 12 0
+7 0 4 0 0 0
+0 2 0
+0 3 0
+0 28 0
+7 0 4 0 2 0
+0 -4 0
+0 1 0
+0 0 0
+6 5 lpmax 7 0 3 0 1 0
+0 2 0
+0 3 0
+6 6 result 8 0 43 8 0 74 7 1 2 8 0 0 'sum' 8 0 10 8 0 1 7 1 2 6 8 expected 8 0 2 6 6 result 0 0 0
+6 6 test12 8 0 15 7 1 2 8 0 73 7 1 3 7 1 0 7 1 0 8 0 42 7 1 2 7 0 2 7 1 2 6 8 expected 6 6 result 7 1 0 7 32 3 8 0 15 7 1 2 8 0 0 'copy' 7 0 5 0 28 0
+7 0 5 7 0 8 0 1 0
+0 0 0
+0 0 0
+0 0 0
+0 -3 0
+0 1 0
+0 2 0
+0 14 0
+7 0 8 0 0 0
+0 0 0
+0 1 0
+0 0 0
+0 2 0
+0 0 0
+0 -1 0
+0 8 0
+7 0 8 0 0 0
+0 1 0
+0 0 0
+0 0 0
+0 -3 0
+0 0 0
+0 2 0
+0 2 0
+7 0 8 0 0 0
+0 0 0
+0 0 0
+0 1 0
+0 -2 0
+0 0 0
+0 1 0
+0 1 0
+7 0 8 0 0 0
+0 0 0
+0 0 0
+0 0 0
+0 8 0
+0 2 0
+0 -5 0
+0 28 0
+7 0 4 0 1 0
+0 3 0
+0 2 0
+0 4 0
+0 4 0
+7 0 7 7 0 1 0 14 0
+7 0 1 0 2 0
+7 0 1 0 8 0
+7 0 1 0 1 0
+7 0 1 0 0 0
+7 0 1 0 0 0
+7 0 1 0 0 0
+6 8 expected 8 0 15 7 1 2 8 0 81 7 1 2 6 7 simplex 7 1 3 7 0 3 7 0 4 0 1 0
+0 -1 0
+0 0 0
+0 12 0
+7 0 4 0 0 0
+0 2 0
+0 3 0
+0 28 0
+7 0 4 0 2 0
+0 -4 0
+0 1 0
+0 0 0
+0 2 0
+7 0 3 0 1 0
+0 2 0
+0 3 0
+6 6 result 8 0 43 8 0 74 7 1 2 8 0 0 'sum' 8 0 10 8 0 1 7 1 2 6 8 expected 8 0 2 6 6 result 0 0 0
+6 6 test13 8 0 15 7 1 2 8 0 73 7 1 3 7 1 0 7 1 0 8 0 42 7 1 2 7 0 2 7 1 2 6 8 expected 6 6 result 7 1 0 7 32 3 8 0 15 7 1 2 8 0 0 'copy' 7 0 5 0 47 0
+7 0 5 7 0 7 0 0 0
+0 0 0
+0 1 0
+0 2 0
+0 0 0
+0 -4 0
+0 10 0
+7 0 7 0 1 0
+0 0 0
+0 0 0
+0 -1 0
+0 0 0
+0 1 0
+0 2 0
+7 0 7 0 0 0
+0 1 0
+0 0 0
+0 1 0
+0 0 0
+8 0 5 7 1 2 0 -3 0
+0 2 0
+0 7 0
+7 0 7 0 0 0
+0 0 0
+0 0 0
+0 1 0
+0 1 0
+8 0 5 7 1 2 0 -7 0
+0 2 0
+0 3 0
+7 0 7 0 0 0
+0 0 0
+0 0 0
+0 1 0
+0 0 0
+8 0 5 7 1 2 0 3 0
+0 2 0
+0 -47 0
+7 0 4 0 3 0
+0 1 0
+0 2 0
+0 5 0
+0 3 0
+7 0 6 7 0 1 0 2 0
+7 0 1 0 7 0
+7 0 1 0 10 0
+7 0 1 0 0 0
+7 0 1 0 3 0
+7 0 1 0 0 0
+6 8 expected 8 0 15 7 1 2 8 0 81 7 1 2 6 7 simplex 7 1 3 7 0 4 8 0 2 7 0 3 0 2 0
+0 4 0
+0 22 0
+8 0 2 7 0 3 0 3 0
+0 2 0
+0 20 0
+8 0 2 7 0 3 0 4 0
+0 5 0
+0 40 0
+7 0 3 0 6 0
+0 5 0
+0 0 0
+6 5 lpmin 7 0 2 0 1 0
+0 2 0
+6 6 result 8 0 43 8 0 74 7 1 2 8 0 0 'sum' 8 0 10 8 0 1 7 1 2 6 8 expected 8 0 2 6 6 result 0 0 0
+6 6 test14 8 0 15 7 1 2 8 0 73 7 1 3 7 1 0 7 1 0 8 0 42 7 1 2 7 0 2 7 1 2 6 8 expected 6 6 result 7 1 0 7 32 3 8 0 15 7 1 2 8 0 0 'copy' 7 0 5 0 53 0
+7 0 15 7 0 20 0 1 0
+0 0 0
+0 0 0
+0 0 0
+0 0 0
+0 0 0
+0 0 0
+0 0 0
+0 0 0
+0 0 0
+0 0 0
+0 0 0
+0 1 0
+0 0 0
+0 0 0
+0 0 0
+0 0 0
+0 0 0
+0 0 0
+0 1 0
+7 0 20 0 0 0
+0 0 0
+0 0 0
+0 0 0
+0 0 0
+0 0 0
+0 1 0
+0 0 0
+0 0 0
+0 0 0
+0 0 0
+0 0 0
+8 0 5 7 1 2 0 -37 0
+0 8 0
+8 0 5 7 1 2 0 13 0
+0 8 0
+8 0 5 7 1 2 0 -3 0
+0 4 0
+0 0 0
+0 0 0
+8 0 5 7 1 2 0 -15 0
+0 8 0
+8 0 5 7 1 2 0 41 0
+0 8 0
+8 0 5 7 1 2 0 49 0
+0 4 0
+7 0 20 0 0 0
+0 0 0
+0 0 0
+0 0 0
+0 0 0
+0 0 0
+0 0 0
+0 1 0
+0 0 0
+0 0 0
+0 0 0
+0 0 0
+0 -2 0
+0 -3 0
+0 -1 0
+0 0 0
+0 0 0
+0 -2 0
+0 1 0
+0 13 0
+7 0 20 0 0 0
+0 0 0
+0 0 0
+0 0 0
+0 0 0
+0 0 0
+0 0 0
+0 0 0
+0 1 0
+0 0 0
+0 0 0
+0 0 0
+8 0 5 7 1 2 0 43 0
+0 8 0
+8 0 5 7 1 2 0 -59 0
+0 8 0
+8 0 5 7 1 2 0 5 0
+0 4 0
+0 0 0
+0 0 0
+8 0 5 7 1 2 0 -15 0
+0 8 0
+8 0 5 7 1 2 0 -55 0
+0 8 0
+8 0 5 7 1 2 0 69 0
+0 4 0
+7 0 20 0 0 0
+0 0 0
+0 0 0
+0 0 0
+0 0 0
+0 1 0
+0 0 0
+0 0 0
+0 0 0
+0 0 0
+0 0 0
+0 0 0
+8 0 5 7 1 2 0 -11 0
+0 8 0
+8 0 5 7 1 2 0 11 0
+0 8 0
+8 0 5 7 1 2 0 3 0
+0 4 0
+0 0 0
+0 0 0
+8 0 5 7 1 2 0 -9 0
+0 8 0
+8 0 5 7 1 2 0 7 0
+0 8 0
+8 0 5 7 1 2 0 3 0
+0 4 0
+7 0 20 0 0 0
+0 0 0
+0 0 0
+0 1 0
+0 0 0
+0 0 0
+0 0 0
+0 0 0
+0 0 0
+0 0 0
+0 0 0
+0 0 0
+0 -1 0
+0 0 0
+0 -1 0
+0 0 0
+0 0 0
+0 0 0
+0 1 0
+0 0 0
+7 0 20 0 0 0
+0 0 0
+0 0 0
+0 0 0
+0 0 0
+0 0 0
+0 0 0
+0 0 0
+0 0 0
+0 0 0
+0 0 0
+0 1 0
+8 0 5 7 1 2 0 3 0
+0 8 0
+8 0 5 7 1 2 0 -11 0
+0 8 0
+8 0 5 7 1 2 0 1 0
+0 4 0
+0 0 0
+0 0 0
+8 0 5 7 1 2 0 1 0
+0 8 0
+8 0 5 7 1 2 0 -7 0
+0 8 0
+8 0 5 7 1 2 0 1 0
+0 4 0
+7 0 20 0 0 0
+0 0 0
+0 0 0
+0 0 0
+0 0 0
+0 0 0
+0 0 0
+0 0 0
+0 0 0
+0 0 0
+0 1 0
+0 0 0
+8 0 5 7 1 2 0 -3 0
+0 8 0
+8 0 5 7 1 2 0 11 0
+0 8 0
+8 0 5 7 1 2 0 3 0
+0 4 0
+0 0 0
+0 0 0
+8 0 5 7 1 2 0 -1 0
+0 8 0
+8 0 5 7 1 2 0 7 0
+0 8 0
+8 0 5 7 1 2 0 3 0
+0 4 0
+7 0 20 0 0 0
+0 0 0
+0 0 0
+0 0 0
+0 1 0
+0 0 0
+0 0 0
+0 0 0
+0 0 0
+0 0 0
+0 0 0
+0 0 0
+8 0 5 7 1 2 0 11 0
+0 8 0
+8 0 5 7 1 2 0 -11 0
+0 8 0
+8 0 5 7 1 2 0 1 0
+0 4 0
+0 0 0
+0 0 0
+8 0 5 7 1 2 0 1 0
+0 8 0
+8 0 5 7 1 2 0 -15 0
+0 8 0
+8 0 5 7 1 2 0 1 0
+0 4 0
+7 0 20 0 0 0
+0 0 0
+0 1 0
+0 0 0
+0 0 0
+0 0 0
+0 0 0
+0 0 0
+0 0 0
+0 0 0
+0 0 0
+0 0 0
+0 0 0
+0 0 0
+0 1 0
+0 0 0
+0 0 0
+0 0 0
+0 0 0
+0 1 0
+7 0 20 0 0 0
+0 0 0
+0 0 0
+0 0 0
+0 0 0
+0 0 0
+0 0 0
+0 0 0
+0 0 0
+0 0 0
+0 0 0
+0 0 0
+0 1 0
+0 0 0
+0 1 0
+0 1 0
+0 0 0
+0 0 0
+0 -1 0
+0 1 0
+7 0 20 0 0 0
+0 0 0
+0 0 0
+0 0 0
+0 0 0
+0 0 0
+0 0 0
+0 0 0
+0 0 0
+0 0 0
+0 0 0
+0 0 0
+8 0 5 7 1 2 0 -11 0
+0 8 0
+8 0 5 7 1 2 0 11 0
+0 8 0
+8 0 5 7 1 2 0 -1 0
+0 4 0
+0 0 0
+0 1 0
+8 0 5 7 1 2 0 -1 0
+0 8 0
+8 0 5 7 1 2 0 15 0
+0 8 0
+8 0 5 7 1 2 0 3 0
+0 4 0
+7 0 20 0 0 0
+0 0 0
+0 0 0
+0 0 0
+0 0 0
+0 0 0
+0 0 0
+0 0 0
+0 0 0
+0 1 0
+0 0 0
+0 0 0
+0 1 0
+0 -1 0
+0 0 0
+0 0 0
+0 0 0
+0 0 0
+0 0 0
+0 0 0
+7 0 20 0 0 0
+0 1 0
+0 0 0
+0 0 0
+0 0 0
+0 0 0
+0 0 0
+0 0 0
+0 0 0
+0 0 0
+0 0 0
+0 0 0
+0 0 0
+0 1 0
+0 0 0
+0 0 0
+0 0 0
+0 0 0
+0 0 0
+0 1 0
+7 0 20 0 0 0
+0 0 0
+0 0 0
+0 0 0
+0 0 0
+0 0 0
+0 0 0
+0 0 0
+0 0 0
+0 0 0
+0 0 0
+0 0 0
+8 0 5 7 1 2 0 3 0
+0 2 0
+8 0 5 7 1 2 0 3 0
+0 2 0
+0 0 0
+0 0 0
+0 0 0
+8 0 5 7 1 2 0 3 0
+0 2 0
+8 0 5 7 1 2 0 5 0
+0 2 0
+0 53 0
+7 0 14 0 1 0
+0 7 0
+0 8 0
+0 9 0
+0 6 0
+0 4 0
+0 12 0
+0 11 0
+0 5 0
+0 3 0
+0 16 0
+0 17 0
+0 10 0
+0 2 0
+0 10 0
+7 0 19 7 0 1 0 1 0
+7 0 1 0 1 0
+7 0 1 0 0 0
+7 0 1 0 1 0
+7 0 1 0 0 0
+7 0 1 0 0 0
+7 0 1 0 13 0
+7 0 1 0 14 0
+7 0 1 0 16 0
+7 0 1 0 0 0
+7 0 1 0 0 0
+7 0 1 0 0 0
+7 0 1 0 0 0
+7 0 1 0 0 0
+7 0 1 0 1 0
+7 0 1 0 0 0
+7 0 1 0 1 0
+7 0 1 0 0 0
+7 0 1 0 0 0
+6 8 expected 8 0 15 7 1 2 8 0 81 7 1 2 6 7 simplex 7 1 4 7 0 8 7 0 6 0 5 0
+0 11 0
+0 13 0
+0 16 0
+0 9 0
+0 32 0
+7 0 6 0 7 0
+0 19 0
+0 20 0
+0 23 0
+0 15 0
+0 62 0
+7 0 6 0 9 0
+0 25 0
+0 26 0
+0 29 0
+0 16 0
+0 77 0
+7 0 6 0 9 0
+0 28 0
+0 30 0
+0 35 0
+0 15 0
+0 88 0
+7 0 6 0 -1 0
+0 1 0
+0 0 0
+0 0 0
+0 0 0
+0 0 0
+7 0 6 0 0 0
+0 0 0
+0 0 0
+0 1 0
+0 1 0
+0 1 0
+7 0 6 0 0 0
+0 0 0
+0 -1 0
+0 -1 0
+0 -1 0
+0 -1 0
+7 0 6 0 10 0
+0 18 0
+0 22 0
+0 25 0
+0 12 0
+0 0 0
+6 5 lpmax 7 0 0 7 0 5 0 1 0
+0 2 0
+0 3 0
+0 4 0
+0 5 0
+6 6 result 8 0 43 8 0 74 7 1 2 8 0 0 'sum' 8 0 10 8 0 1 7 1 2 6 8 expected 8 0 2 6 6 result 0 0 0
+6 6 test15 8 0 15 7 1 2 8 0 73 7 1 3 7 1 0 7 1 0 8 0 42 7 1 2 7 0 2 7 1 2 6 8 expected 6 6 result 7 1 0 7 32 3 8 0 15 7 1 2 8 0 0 'copy' 7 0 3 0 0 0
+7 0 3 7 0 1 8 0 5 7 1 2 0 1 0
+0 4 0
+7 0 1 8 0 5 7 1 2 0 1 0
+0 2 0
+7 0 1 8 0 5 7 1 2 0 1 0
+0 4 0
+7 0 3 7 0 1 8 0 5 7 1 2 0 1 0
+0 4 0
+7 0 1 8 0 5 7 1 2 0 1 0
+0 2 0
+7 0 1 8 0 5 7 1 2 0 1 0
+0 4 0
+6 8 expected 8 0 15 7 1 2 8 0 81 7 1 2 6 9 solveGame 7 0 3 7 0 3 0 0 0
+0 1 0
+0 -2 0
+7 0 3 0 -1 0
+0 0 0
+0 1 0
+7 0 3 0 2 0
+0 -1 0
+0 0 0
+6 6 result 8 0 43 8 0 74 7 1 2 8 0 0 'sum' 8 0 10 8 0 1 7 1 2 6 8 expected 8 0 2 6 6 result 0 0 0
+6 6 test16 8 0 15 7 1 2 8 0 73 7 1 3 7 1 0 7 1 0 8 0 42 7 1 2 7 0 2 7 1 2 6 8 expected 6 6 result 7 1 0 7 32 3 8 0 15 7 1 2 8 0 0 'copy' 7 0 5 8 0 5 7 1 2 0 -5 0
+0 4 0
+7 0 4 7 0 11 0 0 0
+0 2 0
+0 1 0
+0 1 0
+0 -24 0
+0 0 0
+0 6 0
+0 0 0
+0 2 0
+0 1 0
+0 1 0
+7 0 11 0 0 0
+0 0 0
+0 1 0
+0 0 0
+0 0 0
+0 1 0
+0 0 0
+0 0 0
+0 0 0
+0 1 0
+0 1 0
+7 0 11 0 1 0
+8 0 5 7 1 2 0 -1 0
+0 2 0
+8 0 5 7 1 2 0 3 0
+0 4 0
+0 0 0
+0 -2 0
+0 0 0
+8 0 5 7 1 2 0 15 0
+0 2 0
+0 1 0
+8 0 5 7 1 2 0 -1 0
+0 2 0
+8 0 5 7 1 2 0 3 0
+0 4 0
+8 0 5 7 1 2 0 3 0
+0 4 0
+7 0 11 0 0 0
+8 0 5 7 1 2 0 3 0
+0 2 0
+8 0 5 7 1 2 0 5 0
+0 4 0
+0 0 0
+0 2 0
+0 0 0
+8 0 5 7 1 2 0 21 0
+0 2 0
+0 0 0
+8 0 5 7 1 2 0 3 0
+0 2 0
+8 0 5 7 1 2 0 5 0
+0 4 0
+8 0 5 7 1 2 0 5 0
+0 4 0
+7 0 3 0 4 0
+0 6 0
+0 1 0
+0 13 0
+7 0 10 7 0 1 8 0 5 7 1 2 0 3 0
+0 4 0
+7 0 1 0 0 0
+7 0 1 0 0 0
+7 0 1 0 1 0
+7 0 1 0 0 0
+7 0 1 0 1 0
+7 0 1 0 0 0
+7 0 1 0 0 0
+7 0 1 0 0 0
+7 0 1 0 0 0
+6 8 expected 8 0 15 7 1 2 8 0 81 7 1 2 6 7 simplex 7 1 2 7 0 4 7 0 8 0 1 0
+0 0 0
+0 0 0
+8 0 5 7 1 2 0 1 0
+0 4 0
+0 -8 0
+0 -1 0
+0 9 0
+0 0 0
+7 0 8 0 0 0
+0 1 0
+0 0 0
+8 0 5 7 1 2 0 1 0
+0 2 0
+0 -12 0
+8 0 5 7 1 2 0 -1 0
+0 2 0
+0 3 0
+0 0 0
+7 0 8 0 0 0
+0 0 0
+0 1 0
+0 0 0
+0 0 0
+0 1 0
+0 0 0
+0 1 0
+7 0 8 0 0 0
+0 0 0
+0 0 0
+8 0 5 7 1 2 0 -3 0
+0 4 0
+0 20 0
+8 0 5 7 1 2 0 -1 0
+0 2 0
+0 6 0
+0 0 0
+0 -3 0
+6 6 result 8 0 43 8 0 74 7 1 2 8 0 0 'sum' 8 0 10 8 0 1 7 1 2 6 8 expected 8 0 2 6 6 result 0 0 0
+6 6 test17 8 0 15 7 1 2 8 0 73 7 1 3 7 1 0 7 1 0 7 32 1 8 0 43 7 0 17 8 0 81 7 1 2 6 6 test01 7 1 0 8 0 81 7 1 2 6 6 test02 7 1 0 8 0 81 7 1 2 6 6 test03 7 1 0 8 0 81 7 1 2 6 6 test04 7 1 0 8 0 81 7 1 2 6 6 test05 7 1 0 8 0 81 7 1 2 6 6 test06 7 1 0 8 0 81 7 1 2 6 6 test07 7 1 0 8 0 81 7 1 2 6 6 test08 7 1 0 8 0 81 7 1 2 6 6 test09 7 1 0 8 0 81 7 1 2 6 6 test10 7 1 0 8 0 81 7 1 2 6 6 test11 7 1 0 8 0 81 7 1 2 6 6 test12 7 1 0 8 0 81 7 1 2 6 6 test13 7 1 0 8 0 81 7 1 2 6 6 test14 7 1 0 8 0 81 7 1 2 6 6 test15 7 1 0 8 0 81 7 1 2 6 6 test16 7 1 0 8 0 81 7 1 2 6 6 test17 7 1 0 6 12 test_simplex 8 0 15 7 1 2 8 0 73 7 1 3 7 1 1 6 1 m 7 1 1 0 0 0
+8 0 42 7 1 2 7 0 2 7 1 7 6 1 a 6 1 b 6 1 c 8 0 15 7 1 2 8 0 0 'dim' 6 1 m 6 1 d 8 0 15 7 1 2 8 0 2 8 0 32 8 0 81 7 1 2 6 6 istart 7 1 0 6 1 l 6 1 r 6 1 v 7 1 0 7 32 2 8 0 70 7 0 3 8 0 74 7 1 2 6 1 d 7 0 2 0 2 0
+0 2 0
+8 0 72 7 1 7 8 0 15 7 1 2 8 0 82 7 1 2 8 0 82 7 1 2 6 1 m 8 0 1 7 1 2 0 1 0
+6 1 l 8 0 1 7 1 2 0 1 0
+6 1 l 6 1 a 8 0 15 7 1 2 8 0 82 7 1 2 8 0 82 7 1 2 6 1 m 8 0 1 7 1 2 0 1 0
+6 1 l 8 0 1 7 1 2 0 2 0
+6 1 l 6 1 b 8 0 15 7 1 2 8 0 82 7 1 2 8 0 82 7 1 2 6 1 m 8 0 1 7 1 2 0 2 0
+6 1 l 8 0 1 7 1 2 0 1 0
+6 1 l 6 1 c 8 0 15 7 1 2 8 0 82 7 1 2 8 0 82 7 1 2 6 1 m 8 0 1 7 1 2 0 2 0
+6 1 l 8 0 1 7 1 2 0 2 0
+6 1 l 6 1 d 8 0 15 7 1 2 8 0 1 7 1 4 6 1 a 6 1 d 8 0 2 6 1 b 8 0 2 6 1 c 6 1 r 8 0 15 7 1 2 8 0 5 7 1 2 8 0 1 7 1 2 8 0 4 7 1 2 6 1 a 6 1 d 8 0 2 8 0 4 7 1 2 6 1 b 6 1 c 6 1 r 6 1 v 8 0 43 7 0 3 6 1 v 8 0 0 'transpose' 7 0 2 8 0 5 7 1 2 8 0 1 7 1 2 6 1 d 8 0 2 6 1 c 6 1 r 8 0 5 7 1 2 8 0 1 7 1 2 6 1 a 8 0 2 6 1 b 6 1 r 8 0 0 'transpose' 7 0 2 8 0 5 7 1 2 8 0 1 7 1 2 6 1 d 8 0 2 6 1 b 6 1 r 8 0 5 7 1 2 8 0 1 7 1 2 6 1 a 8 0 2 6 1 c 6 1 r 0 0 0
+8 0 43 7 0 0 6 8 twobytwo 8 0 15 7 1 2 8 0 73 7 1 3 7 1 3 6 1 m 6 1 x 6 1 y 7 1 3 0 0 0
+0 0 0
+0 0 0
+8 0 42 7 1 2 7 0 2 7 1 6 6 1 d 8 0 15 7 1 2 8 0 0 'dim' 6 1 m 6 2 d1 8 0 15 7 1 2 8 0 0 'copy' 7 0 0 6 1 n 8 0 15 7 1 2 8 0 0 'copy' 7 0 2 0 -1 0
+0 1 0
+6 1 v 8 0 15 7 1 2 8 0 2 8 0 32 8 0 81 7 1 2 6 6 istart 7 1 0 6 1 l 8 0 15 7 1 2 0 0 0
+6 1 I 7 1 0 7 32 6 8 0 70 7 0 3 8 0 39 7 1 2 6 1 x 7 0 0 8 0 72 7 1 4 8 0 15 7 1 2 8 0 0 'dim' 6 1 x 6 1 d 8 0 70 7 0 3 8 0 39 7 1 2 8 0 0 'dim' 6 1 d 0 2 0
+8 0 72 7 1 2 8 0 15 7 1 2 8 0 0 'transpose' 6 1 x 6 1 x 8 0 15 7 1 2 8 0 0 'copy' 7 0 2 6 1 d 0 1 0
+6 1 d 0 0 0
+8 0 70 7 0 3 8 0 35 7 1 2 8 0 82 7 1 2 6 1 d 8 0 1 7 1 2 0 1 0
+6 1 l 8 0 82 7 1 2 6 2 d1 8 0 1 7 1 2 0 1 0
+6 1 l 8 0 72 7 1 2 8 0 15 7 1 2 8 0 0 'transpose' 6 1 x 6 1 x 8 0 15 7 1 2 8 0 0 'copy' 7 0 2 8 0 82 7 1 2 6 1 d 8 0 1 7 1 2 0 2 0
+6 1 l 8 0 82 7 1 2 6 1 d 8 0 1 7 1 2 0 1 0
+6 1 l 6 1 d 0 0 0
+8 0 71 7 0 4 8 0 15 7 1 2 0 1 0
+6 1 I 8 0 36 7 1 2 6 1 I 8 0 82 7 1 2 6 1 d 8 0 1 7 1 2 0 2 0
+6 1 l 8 0 15 7 1 2 8 0 1 7 1 2 6 1 I 0 1 0
+6 1 I 8 0 15 7 1 2 8 0 0 'append' 7 1 2 6 1 n 8 0 0 'min' 8 0 4 7 1 2 8 0 0 'col' 7 1 2 6 1 x 8 0 1 7 1 2 6 1 I 6 1 l 6 1 m 6 1 n 8 0 15 7 1 2 0 0 0
+8 0 82 7 1 2 6 1 v 8 0 1 7 1 2 0 1 0
+6 1 l 8 0 70 7 0 3 8 0 82 7 1 2 6 1 v 8 0 1 7 1 2 0 1 0
+6 1 l 8 0 15 7 1 2 8 0 0 'max' 6 1 n 8 0 82 7 1 2 6 1 v 8 0 1 7 1 2 0 1 0
+6 1 l 8 0 15 7 1 2 8 0 0 'copy' 7 0 0 8 0 82 7 1 2 6 1 v 8 0 1 7 1 2 0 1 0
+6 1 l 8 0 15 7 1 2 8 0 0 'copy' 7 0 0 6 1 n 8 0 70 7 0 3 8 0 39 7 1 2 6 1 y 7 0 0 8 0 72 7 1 4 8 0 15 7 1 2 8 0 0 'dim' 6 1 y 6 1 d 8 0 70 7 0 3 8 0 39 7 1 2 8 0 0 'dim' 6 1 d 0 2 0
+8 0 72 7 1 2 8 0 15 7 1 2 8 0 0 'transpose' 6 1 y 6 1 y 8 0 15 7 1 2 8 0 0 'copy' 7 0 2 6 1 d 0 1 0
+6 1 d 0 0 0
+8 0 70 7 0 3 8 0 35 7 1 2 8 0 82 7 1 2 6 1 d 8 0 1 7 1 2 0 1 0
+6 1 l 8 0 82 7 1 2 6 2 d1 8 0 1 7 1 2 0 2 0
+6 1 l 8 0 72 7 1 2 8 0 15 7 1 2 8 0 0 'transpose' 6 1 y 6 1 y 8 0 15 7 1 2 8 0 0 'copy' 7 0 2 8 0 82 7 1 2 6 1 d 8 0 1 7 1 2 0 2 0
+6 1 l 8 0 82 7 1 2 6 1 d 8 0 1 7 1 2 0 1 0
+6 1 l 6 1 d 0 0 0
+8 0 71 7 0 4 8 0 15 7 1 2 0 1 0
+6 1 I 8 0 36 7 1 2 6 1 I 8 0 82 7 1 2 6 1 d 8 0 1 7 1 2 0 2 0
+6 1 l 8 0 15 7 1 2 8 0 1 7 1 2 6 1 I 0 1 0
+6 1 I 8 0 15 7 1 2 8 0 0 'append' 7 1 2 6 1 n 8 0 0 'max' 8 0 4 7 1 2 6 1 m 8 0 0 'col' 7 1 2 6 1 y 8 0 1 7 1 2 6 1 I 6 1 l 6 1 n 8 0 15 7 1 2 0 0 0
+8 0 82 7 1 2 6 1 v 8 0 1 7 1 2 0 2 0
+6 1 l 8 0 70 7 0 3 8 0 82 7 1 2 6 1 v 8 0 1 7 1 2 0 2 0
+6 1 l 8 0 15 7 1 2 8 0 0 'min' 6 1 n 8 0 82 7 1 2 6 1 v 8 0 1 7 1 2 0 2 0
+6 1 l 8 0 15 7 1 2 8 0 0 'copy' 7 0 0 8 0 82 7 1 2 6 1 v 8 0 1 7 1 2 0 2 0
+6 1 l 8 0 43 7 0 2 8 0 82 7 1 2 6 1 v 8 0 1 7 1 2 0 1 0
+6 1 l 8 0 82 7 1 2 6 1 v 8 0 1 7 1 2 0 2 0
+6 1 l 6 20 verifySecurityLevels 8 0 0 'xcas_mode' 0 0 0
+
