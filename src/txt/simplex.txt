@@ -1,9 +1,8 @@
 // Author: @ftneek
 // Thanks: @Albert Chan for their contributions
-// Last revised: 2024/11/26
+// Last revised: 2024/11/30
 // Reference: An Introduction to Linear Programming and Game Theory 3rd Edition, Paul R. Thie and Gerard E. Keough (ISBN: 978-0470232866)
 
-// TODO: handle 0-based indexing to be compatible with Xcas (and python_compat mode)
 // TODO: symbolic input
 // TODO: omit arguments from simplex() if they are not needed
 // TODO: create pdf documentation
@@ -45,12 +44,12 @@
 #cas
 lpmax:=inf;
 lpmin:=-inf;
-NO_SOLUTIONS():=contains(version(),"HP Prime") ? STRINGFROMID("AppQuadE_LinearSolverNoSolution") : "No solutions";
+NO_SOLUTIONS():=contains(version(),"HP Prime") ? STRINGFROMID("AppQuadE_LinearSolverNoSolution") : "No solutions":;
 
 simplex(a):=
 begin
 local (art:=0),(dir:=-inf),(binary:=[]),(integers:=[]),(unrestricted:=[]);
-local b,c,d,v,bv,n,(ge:=0);
+local b,c,d,v,bv,n,I,J,(ge:=0),(l:=-not(istart()));
 
 if dim(d:=dim(a))!=2 then
  if d>5 then error(a) end;
@@ -66,70 +65,71 @@ end;
 
 if c:=len(unrestricted) then
  for I from c downto 1 do
-  b:=col(a,unrestricted[I]);
-  a:=addcol1(a,-b,unrestricted[I]+1);
-  if n:=contains(integers,unrestricted[I]) then
+  b:=col(a,unrestricted[I+l]+l);
+  a:=addcol1(a,-b,unrestricted[I+l]+1+l);
+  if n:=contains(integers,unrestricted[I+l]) then
    integers:=extend(integers,0);
-   for J from len(integers) downto n+1 do integers[J]:=integers[J-1]+1 end;
+   for J from len(integers) downto n+1 do integers[J+l]:=integers[J-1+l]+1+l end;
   end;
  end;
-d[2]+=c;
+d[2+l]+=c;
 end;
 
-c:=row(a,d[1]);
-a:=delrows(a,d[1]);
+c:=row(a,d[1+l]+l);
+a:=delrows(a,d[1+l]+l);
 
 if b:=len(binary) then
  v:=[];
  for I from 1 to b do
-  n:=makelist(d[2]);
-  n[binary[I]]:=1;
-  n[0]:=1;
+  n:=makelist(d[2+l]);
+  n[binary[I+l]+l]:=1;
+  n[0+l]:=1;
   v:=append(v,n);
  end;
  a:=append(a,op(v));
- d[1]+=b;
+ d[1+l]+=b;
  integers:=sort(integers union binary);
 end;
 
-b:=col(a,d[2]);
-a:=delcols(a,d[2]);
+b:=col(a,d[2+l]+l);
+a:=delcols(a,d[2+l]+l);
 d:=d.-1;
 
 if ge then
  for I from 1 to ge do
-  v:=makelist(d[1]);
-  v[art+I]:=-1;
-  d[2]+=1;
-  a:=extend(a,transpose(v));
+  v:=makelist(d[1+l]);
+  v[art+I+l]:=-1;
+  d[2+l]+=1;
+  a:=concat(a,transpose(v));
  end;
  art+=ge;
 end;
 
-if art==0 or art==d[1] then a:=extend(a,identity(d[1]));
+if art==0 or art==d[1+l] then a:=concat(a,identity(d[1+l]));
 else
- v:=append(makemat(0,art,d[1]-art),op(identity(d[1]-art)));
- v:=extend(v,append(identity(art),op(makemat(0,d[1]-art,art))));
- a:=extend(a,v);
+ v:=append(makemat(0,art,d[1+l]-art),op(identity(d[1+l]-art)));
+ v:=concat(v,append(identity(art),op(makemat(0,d[1+l]-art,art))));
+ a:=concat(a,v);
 end;
-a:=extend(a,transpose(b));
-d[2]+=1;
-c:=extend(c,makelist(d[1]+ge));
-c[0]:=c[d[2]];
-c[d[2]]:=0;
+a:=concat(a,transpose(b));
+d[2+l]+=1;
+c:=extend(c,makelist(d[1+l]+ge));
+c[0+l]:=c[d[2+l]+l];
+c[d[2+l]+l]:=0;
 a:=append(a,c);
 
 n:=art;
 c,v:=dim(a).-1;  /* constraints, variables */
-bv:=extend(range(v-art+1,v+1),range(d[2],v-art+1));
-if dir>0 then a[0]:=-a[0] end;
-if integers == [] then c:=simplex_core(addartrow(a,art),bv,art,0,0) else c:=simplex_int(addartrow(a,art),bv,art,0,0,integers) end;
-if dir>0 and c[1]!=NO_SOLUTIONS() then c[1]:=-c[1] end;
+bv:=extend(range(v-art+1,v+1),range(d[2+l],v-art+1));
+if dir>0 then a[0+l]:=-a[0+l] end;
+a:=addartrow(a,art);
+if integers == [] then c:=simplex_core(a,bv,art,0,0) else c:=simplex_int(a,bv,art,0,0,integers) end;
+if dir>0 and c[1+l]!=NO_SOLUTIONS() then c[1+l]:=-c[1+l] end;
 //if unrestricted != [] then for I from 1 to len(unrestricted) do c[0][unrestricted[I]]-=c[0][unrestricted[I]+1] end end;
 //if unrestricted != [] then for I from len(unrestricted) downto 1 do c[0]:=delrows(c[0],I+1) end end;
 //return [c[1],c[0]];
 return c;
-end;
+end:;
 
 // Returns list [z,m,bv,P,X]
 // z is the minimum, m is the final tableau, bv is a list of basic variables, P is the number of pivot1 operations, X are the optimal inputs
@@ -138,55 +138,55 @@ end;
 // a column of X is a solution, X is empty for unbounded z or empty feasible region. len(X[1])>1 for alternate/infinite solutions
 simplex_core(a,bv,art,ign,P):=
 begin
-local (a2:=[]),b,c,(d:=dim(a)),bmin,cmin,(n:=1+(art>0)),(l1:=[]),(l2:=[]),(I:=0),(J:=0),(bvIDS:=[basis_to_id(bv,dim(a)[2]-1)]),(bland:=false);
-c:=row(a,0)[1..d[2]-(ign+1)];
+local (a2:=[]),b,c,(d:=dim(a)),bmin,cmin,(n:=1+(art>0)),(l1:=[]),(l2:=[]),(I:=0),(J:=0),(bvIDS:=[basis_to_id(bv,dim(a)[[2]]-1)]),(bland:=false),(l:=-not(istart()));
+c:=row(a,0+l)[1+l..d[2+l]-(ign+1)+l];
 cmin:=min(c);
-b:=col(a,0)[1..d(1)-n];
+b:=col(a,0+l)[1+l..d[1+l]-n+l];
 bmin:=min(b);
 
 // Step 2: If all ci,bi≥0 go to Step 6
 while cmin<0 or bmin<0 do
 
 // Step 3: For any ci < 0 check for UNBOUNDED SOLUTION
- for I from 1 to (d[2]-1-ign) do if c(I) < 0 and max(col(a,I))<=0 then return [-inf,a,bv,P,[]] end end;
+ for I from 1 to (d[2+l]-1-ign) do if c[I+l] < 0 and max(col(a,I+l))<=0 then return [-inf,a,bv,P,[]] end end;
 
 // Step 4: Determine bv to enter and exit
- if bland then for I from 1 to (d[2]-1-ign) do if c(I) < 0 and not(contains(bv,I)) then J:=I end end;
+ if bland then for I from 1 to (d[2+l]-1-ign) do if c[I+l] < 0 and not(contains(bv,I)) then J:=I end end;
  else J:=contains(c,cmin) end; // xin
- I:=minRatio(col(a,J),col(a,0),n); // xout
+ I:=minRatio(col(a,J+l),col(a,0+l),n); // xout
 
 // Step 5: Canonical reduction with new bv
- if bv[I]!=J then
-  bv[I]:=J;
-  a:=pivot1(a,I,J); P+=1;
+ if bv[I+l]!=J then
+  bv[I+l]:=J;
+  a:=pivot1(a,I+l,J+l); P+=1;
 // If a basis is repeated, use Bland's rule to prevent cycling
-  if contains(bvIDS,(c:=basis_to_id(bv,dim(a)[2]-1))) then bland:=true else bvIDS:=append(bvIDS,c) end;
-  c:=row(a,0)[1..d[2]-ign-1];
+  if contains(bvIDS,(c:=basis_to_id(bv,d[2+l]-1))) then bland:=true; else bvIDS:=append(bvIDS,c) end;
+  c:=row(a,0+l)[1+l..d[2+l]-ign-1+l];
   if (cmin:=min(c))<0 then continue end;
  end;
 
  if cmin>=0 then
   if art>0 then
 // Check for NO SOLUTION / INFEASIBLE MODEL
-   if a[0,0] then return [NO_SOLUTIONS(),a,bv,P,[]] end;
-   a:=delrows(a,d[1]);
-   d[1]-=(n:=1);
+   if a[0+l,0+l] then return [NO_SOLUTIONS(),a,bv,P,[]] end;
+   a:=delrows(a,d[1+l]+l);
+   d[1+l]-=(n:=1);
    ign+=art;
    art:=0;
-   c:=row(a,0)[1..d[2]-ign-1];
+   c:=row(a,0+l)[1+l..d[2+l]-ign-1+l];
    cmin:=min(c);
   else
-   b:=col(a,0)[1..d(1)-n];
+   b:=col(a,0+l)[1+l..d[1+l]-n+l];
    bmin:=min(b);
 // if ∃bi<0, use Dual Simplex
    if bmin<0 then
 // For any bi < 0 check for NO SOLUTION
-    for I from 1 to len(b) do if b(I)<0 and min(row(a,I)[1..d[2]-1-ign])>=0 then return [NO_SOLUTIONS(),a,bv,P,[]] end end;
+    for I from 1 to len(b) do if b[I+l]<0 and min(row(a,I+l)[1+l..d[2+l]-1-ign+l])>=0 then return [NO_SOLUTIONS(),a,bv,P,[]] end end;
     I:=contains(b,bmin);
-    J:=minRatio(-a[I],c,0); /* max ratio */
-    bv[I]:=J;
-    a:=pivot1(a,I,J); P+=1;
-    c:=row(a,0)[1..d[2]-ign-1];
+    J:=minRatio(-a[I+l],c,0); /* max ratio */
+    bv[I+l]:=J;
+    a:=pivot1(a,I+l,J+l); P+=1;
+    c:=row(a,0+l)[1+l..d[2+l]-ign-1+l];
     cmin:=min(c);
    end;
   end;
@@ -197,106 +197,108 @@ end;
 l1:=sol(a);
 
 a2:=a;
-c:=row(a2,0)[1..d[2]-ign-1];
+c:=row(a2,0+l)[1+l..d[2+l]-ign-1+l];
 // Check for ALTERNATE / INFINITE SOLUTIONS
 for J from 1 to len(c) do
- if c(J) or contains(bv,J) then continue end
- if (b:=abs(transpose(col(a2,J))))==1 or b==0 then continue end
- I:=minRatio(col(a2,J),col(a2,0),1);
- a2:=pivot1(a2,I,J); P+=1;
+ if c[J+l] or contains(bv,J) then continue end
+ if (b:=abs(transpose(col(a2,J+l))))==1 or b==0 then continue end
+ I:=minRatio(col(a2,J+l),col(a2,0+l),1);
+ a2:=pivot1(a2,I+l,J+l); P+=1;
  l2:=sol(a2);
  if l1==l2 then break end;
- return [-a[0][0],a,bv,P,transpose(l1,l2)];
+ return [-a[0+l][0+l],a,bv,P,transpose(l1,l2)];
 end;
 
 // UNIQUE SOLUTION
-return [-a[0][0],a,bv,P,transpose(l1)];
-end;
+return [-a[0+l][0+l],a,bv,P,transpose(l1)];
+end:;
 
 sol(a):=
 begin
- local x,b,c,j,k,(v:=dim(a)[2]-1);
+ local x,b,c,j,k,(v:=dim(a)[[2]]-1),(l:=-not(istart()));
  x:=makelist(v); /* all zeroes */
- b:=col(a,0);    /* last column */
+ b:=col(a,0+l);    /* last column */
  for j from 1 to v do
-  if abs(transpose(c:=col(a,j)))!=1 then continue end
+  if abs(transpose(c:=col(a,j+l)))!=1 then continue end
   if (k:=contains(c,1))==0 then continue end
-  if b[k] then x[j]:=b[k]; b[k]:=0 end
+  if b[k+l] then x[j+l]:=b[k+l]; b[k+l]:=0 end
  end;
  return x;
-end;
+end:;
 
 // determine bv to exit
 minRatio(a,b,n):=
  begin
- local i, ratio, (j:=0), (minratio:=inf);
+ local i, ratio, (j:=0), (minratio:=inf),(l:=-not(istart()));
  for i from 1 to len(b)-n do
-  if a[i]<=0 then continue end;
-  ratio:=b[i]/a[i];
+  if a[i+l]<=0 then continue end;
+  ratio:=b[i+l]/a[i+l];
   if minratio>ratio then minratio:=ratio; j:=i end;
  end;
  return j;
-end;
+end:;
 
 // Gomory's Plane Cutting Algorithm
 simplex_int(a,bv,art,ign,P,integers):=
  begin
- local b,d,x,(I:=0),(J:=0),(len_int:=len(integers));
+ local b,d,x,(I:=0),(J:=0),(len_int:=len(integers)),(l:=-not(istart()));
 // Step 1: ignore integer restriction, apply simplex
  a:=simplex_core(a,bv,art,ign,P);
  ign+=art;
  art:=0;
 // STOP if there is no solution
- while(len(x:=a[0])) do
+ while(len(x:=a[0+l])) do
 // Check for infinite solutions
-  if len(x[1])>1 then
+  if len(x[1+l])>1 then
 // remove extra solutions if they are non integer
-   d:=col(x,1);
-   for I from 1 to len_int do if type(d[integers[I]])!=DOM_INT then break end end;
-   d:=col(x,2);
-   for J from 1 to len_int do if type(d[integers[J]])!=DOM_INT then break end end;
-   if J<=len_int then a[0]:=delcol(a[0],2) end;
-   if I<=len_int then a[0]:=delcol(a[0],1) end;
+   d:=col(x,1+l);
+   for I from 1 to len_int do if type(d[integers[I+l]+l])!=DOM_INT then break end end;
+   d:=col(x,2+l);
+   for J from 1 to len_int do if type(d[integers[J+l]+l])!=DOM_INT then break end end;
+   if J<=len_int then a[0+l]:=delcols(a[0+l],2+l) end;
+   if I<=len_int then a[0+l]:=delcols(a[0+l],1+l) end;
    if I>len_int or J>len_int then break end;
   else
-   x:=col(x,1);
+   x:=col(x,1+l);
 // Check for non integer solutions
-   for I from 1 to len_int do if type(x[integers[I]])!=DOM_INT then break end end;
+   for I from 1 to len_int do if type(x[integers[I+l]+l])!=DOM_INT then break end end;
   end;
 
 // STOP if the desired variables are integer
   if I>len_int then break end;
 
 // Step 2: determine constraint with largest fractional part
-  a,bv,P := a[2..4];
+  a,bv,P := a[2+l..4+l];
   d:=dim(a);
-  b:=col(a,d[2]);
-  x := b[1 .. d[1]-1];
+  b:=col(a,d[2+l]+l);
+  x := b[1+l .. d[1+l]-1+l];
   x -= floor(x);
-  x := a[contains(x, max(x))];
+  x := a[contains(x, max(x))+l];
 
 // Create new constraint
   x:=floor(x)-x;
-  for I from d[2]+1 downto d[2]+1-ign do x[I]:=x[I-1] end;
-  x[d[2]-ign]:=1;
-  bv[d[1]]:=d[2]-ign; // pivot on 1
+  for I from d[2+l]+1 downto d[2+l]+1-ign do x[I+l]:=x[I-1+l] end;
+  x[d[2+l]-ign+l]:=1;
+  bv[d[1+l]+l]:=d[2+l]-ign; // pivot on 1
 
-  a:=addcol1(a,b-b,d[2]-ign);
-  a:=insert(a,d[1],x);
+  a:=addcol1(a,b-b,d[2+l]-ign+l);
+  a:=insert(a,d[1+l]+l,x);
 
 // Step 3: solve with new constraint
   a:=simplex_core(a,bv,0,ign,P);
  end;
 return a;
-end;
+end:;
 
-addcol1(m,c,ind):=transpose(insert(transpose(m),ind,c));
-pivot1(m,j,k) := pivot((m[j]:=m[j]/m[j][k]),j,k);
-artrow(col,art):=append(makelist(k->k>col-art,2,col),0);
+istart():=begin [1,0][1]==1 end:;
+addcol1(m,c,ind):=transpose(insert(transpose(m),ind,c)):;
+pivot1(m,j,k) := pivot((m[j]:=m[j]/m[j][k]),j,k):;
+artrow(column,art):=append(makelist(k->k>column-art,2,column),0):;
 addartrow(a,art):=  /* art vars are valid pivots */
 begin
- local c:=len(a[1]);
+ local (c:=len(a[[1]])),(l:=-not(istart())),(J:=0),(lrow:=[]),(d:=0);
  if art<=0 then return a end;
- append(a,artrow(c,art)-sum(a[contains(col(a,J),1)],J,c-art,c-1));
-end;
+ for J in range(c-art,c) do if d:=(contains(col(a,J+l),1)) then lrow+=a[d+l] end end;
+ append(a,artrow(c,art)-lrow);
+end:;
 #end
