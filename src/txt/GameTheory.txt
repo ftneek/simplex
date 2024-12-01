@@ -76,6 +76,15 @@ if alpha then v-=alpha end;
 return [v,transpose(x),transpose(y)];
 end:;
 
+// returns [v,x,y] for pure strategies
+// returns [u1,u2] for no pure strategy
+// v is value of the game
+// a column of (x/y) is a pure strategy for (P1/P2)
+// if dim(x)!=1 then PURE STRATEGY
+// ex x:=transpose([[1,0,0],
+//                  [0,1,0]);
+//    y:=transpose([0,0,0,1]);
+// means pure strategies @ (s1,t4) and (s2,t4)
 pureCheck(a):=
 begin
 local (d:=dim(a)),maxMinRow,minMaxCol,(u:=[1,-1]),I,J,K,(saddle:=[]),(x:=[]),(y:=[]),(l:=-not(istart()));
@@ -117,7 +126,7 @@ if u[1+l]==u[2+l] then
  end;
 
 // [value of the game, Pure strategy @ saddle points]
- return [u[1+l],transpose(x),transpose(y)]
+ return [u[1+l],transpose(x),transpose(y)];
 end:;
 
 // No pure strategy
@@ -244,4 +253,3 @@ if v[2+l] then v[2+l]:=min(n) else v[2+l]:=[] end;
 
 return [v[1+l],v[2+l]];
 end:;
-#end
