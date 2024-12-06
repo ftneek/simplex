@@ -85,19 +85,19 @@ end:;
 //                  [0,1,0]);
 //    y:=transpose([0,0,0,1]);
 // means pure strategies @ (s1,t4) and (s2,t4)
-pureCheck(a):=
+pureCheck(p):=
 begin
-local (d:=dim(a)),maxMinRow,minMaxCol,(u:=[1,-1]),I,J,K,(saddle:=[]),(x:=[]),(y:=[]),(l:=-not(istart()));
+local (d:=dim(p)),maxMinRow,minMaxCol,(u:=[1,-1]),I,J,K,(saddle:=[]),(x:=[]),(y:=[]),(l:=-not(istart()));
 if d==1 then
- a:=[a];
+ p:=[p];
  d:=[1,1];
 end;
-maxMinRow:=col(a,0+l);
-minMaxCol:=a[1+l];
-for I from 1 to d[1+l] do maxMinRow[I+l]:=min(a[I+l]) end;
+maxMinRow:=col(p,0+l);
+minMaxCol:=p[1+l];
+for I from 1 to d[1+l] do maxMinRow[I+l]:=min(p[I+l]) end;
 u[1+l]:=max(maxMinRow);
 
-for I from 1 to d[2+l] do minMaxCol[I+l]:=max(col(a,I+l)) end;
+for I from 1 to d[2+l] do minMaxCol[I+l]:=max(col(p,I+l)) end;
 u[2+l]:=min(minMaxCol);
 
 if u[1+l]==u[2+l] then
@@ -133,14 +133,14 @@ end:;
 return [u[1+l],u[2+l]];
 end:;
 
-twobytwo(m):=
+twobytwo(p):=
 begin
-local a,b,c,(d:=dim(m)),(l:=-not(istart())),r,v;
+local a,b,c,(d:=dim(p)),(l:=-not(istart())),r,v;
 if d==[2,2] then
- a:=m[1+l][1+l];
- b:=m[1+l][2+l];
- c:=m[2+l][1+l];
- d:=m[2+l][2+l];
+ a:=p[1+l,1+l];
+ b:=p[1+l,2+l];
+ c:=p[2+l,1+l];
+ d:=p[2+l,2+l];
  r:=a+d-b-c;
  v:=(a*d-b*c)/r;
  return [v,transpose([(d-c)/r,(a-b)/r]),transpose([(d-b)/r,(a-c)/r])];
@@ -158,16 +158,16 @@ end:;
 
 // uses dominant strategies to reduce a payoff matrix to dim [2,2]
 // returns list of [m', [indices of deleted rows], [indices of deleted columns]]
-dominance(m):=
+dominance(p):=
 begin
-local (a:=1),(d:=dim(m)),(drow:=[]),(dcol:=[]),I,J,(l:=-not(istart()));
+local (a:=1),(d:=dim(p)),(drow:=[]),(dcol:=[]),I,J,(l:=-not(istart()));
 
-while m!=a and d!=[2,2] do
- a:=m;
+while p != a and d!=[2,2] do
+ a:=p;
  for I from 1 to d[1+l] do
   for J from 1 to d[1+l] do
-   if I!=J and checkRow(m[I+l],m[J+l])>0 then
-    m:=delrows(m,I+l);
+   if I!=J and checkRow(p[I+l],p[J+l])>0 then
+    p:=delrows(p,I+l);
     if len(drow)>0 then drow:=append(drow,I+len(drow)) else drow:=append(drow,I) end;
     d[1+l]-=1;
     I-=1;
@@ -178,8 +178,8 @@ while m!=a and d!=[2,2] do
 
  for I from 1 to d[2+l] do
   for J from 1 to d[2+l] do
-   if I!=J and checkRow(col(m,J+l),col(m,I+l))>0 then
-    m:=delcols(m,I+l);
+   if I!=J and checkRow(col(p,J+l),col(p,I+l))>0 then
+    p:=delcols(p,I+l);
     if len(dcol)>0 then dcol:=append(dcol,I+len(dcol)) else dcol:=append(dcol,I) end;
     d[2+l]-=1;
     I-=1;
@@ -189,7 +189,7 @@ while m!=a and d!=[2,2] do
  end;
 
 end;
-return [m,drow,dcol];
+return [p,drow,dcol];
 end:;
 
 // inserts zeros into x for deleted rows and into y for deleted columns

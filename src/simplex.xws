@@ -1,8 +1,8 @@
-// xcas version=1.9.0 fontsize=16 font=0 currentlevel=0 pixon=1
-// fltk 7Fl_Tile 20 62 1142 644 16 0
+// xcas version=1.9.0 fontsize=16 font=0 currentlevel=1 pixon=1
+// fltk 7Fl_Tile 20 62 1036 600 16 0
 [
-// fltk N4xcas7EditeurE 20 62 1142 360 16 0
-11328 0  ,
+// fltk N4xcas7EditeurE 20 62 1036 360 16 0
+11260 0  ,
 // Author: @ftneek
 // Thanks: @Albert Chan for their contributions
 // Last revised: 2024/11/30
@@ -31,7 +31,6 @@
 // [dir] is a list of 2 items; dir[1] is the number of "=" constraints and dir[2] is the number of ">=" constraints.
 // a positive value for dir[1] indicates maximization, a negative value indicates minimization. for no "=" and max use inf, for min use -inf
 // optionally, provide only dir[1] (not a list) for no ">="
-// or provide only dir[2] (a list) for no "=" / NOT IMPLIMENTED YET
 // 'integers' is a list of indices of variables with integer restriction.
 // 'binary' is a list of indices of variables with binary restriction.
 // 'unrestricted' is a list of indices of variables without nonnegative restriction.
@@ -327,16 +326,25 @@ begin
  for J in range(c-art,c) do if d:=(contains(col(a,J+l),1)) then lrow+=a[d+l] end end;
  append(a,artrow(c,art)-lrow);
 end:;,
-// fltk N4xcas10Log_OutputE 20 422 1142 262 16 0
+// fltk N4xcas10Log_OutputE 20 422 1036 202 16 0
 // Parsing NO_SOLUTIONS// Warning: STRINGFROMID, declared as global variable(s). If symbolic variables are required, declare them as local and run purge// compiling NO_SOLUTIONS// Parsing simplex// Success// compiling simplex// Parsing simplex_core// Success// compiling simplex_core// Parsing sol// Success// compiling sol// Parsing minRatio// Success// compiling minRatio// Parsing simplex_int// Success// compiling simplex_int// Parsing basis_to_id// Success// compiling basis_to_id// Parsing id_to_basis// Success// compiling id_to_basis// Parsing istart// Success// compiling istart// Parsing addcol1// Success// compiling addcol1// Parsing pivot1// Success// compiling pivot1// Warning: column,art, declared as global variable(s). If symbolic variables are required, declare them as local and run purge// Parsing artrow// Warning: k, declared as global variable(s). If symbolic variables are required, declare them as local and run purge// compiling artrow// Parsing addartrow// Success// compiling addartrowWarning, i is usually sqrt(-1), I'm using a symbolic variable instead but you should check your input
 ,
-// fltk N4xcas8EquationE 20 684 1142 22 16 0 1
+// fltk N4xcas8EquationE 20 624 1036 38 16 0 1
 +infinity,-infinity,"Done","Done","Done","Done","Done","Done","Done","Done","Done","Done","Done","Done","Done"
 ]
 ,
-// fltk 7Fl_Tile 20 708 1142 644 16 0
+// fltk 7Fl_Tile 20 664 1036 31 16 0
 [
-// fltk N4xcas7EditeurE 20 708 1142 360 16 0
+// fltk N4xcas16Xcas_Text_EditorE 20 664 1036 30 16 0
+0 0 ,
+,
+// fltk N4xcas10Log_OutputE 20 694 1036 1 16 0
+
+]
+,
+// fltk 7Fl_Tile 20 697 1036 644 16 0
+[
+// fltk N4xcas7EditeurE 20 697 1036 360 16 0
 6036 0  ,
 // accepts payoff matrix p for a 2-person zero sum game
 // returns [v,x,y]
@@ -576,16 +584,16 @@ if v[2+l] then v[2+l]:=min(n) else v[2+l]:=[] end;
 
 return [v[1+l],v[2+l]];
 end:;,
-// fltk N4xcas10Log_OutputE 20 1068 1142 262 16 0
+// fltk N4xcas10Log_OutputE 20 1057 1036 262 16 0
 // Parsing solveGame// Success// compiling solveGame// Parsing simplex_game// Success// compiling simplex_game// Parsing pureCheck// Success// compiling pureCheck// Parsing twobytwo// Success// compiling twobytwo// Parsing checkRow// Success// compiling checkRow// Parsing dominance// Success// compiling dominance// Parsing insertZeros// Success// compiling insertZeros// Parsing verifySecurityLevels// Success// compiling verifySecurityLevels
 ,
-// fltk N4xcas8EquationE 20 1330 1142 22 16 0 1
+// fltk N4xcas8EquationE 20 1319 1036 22 16 0 1
 "Done","Done","Done","Done","Done","Done","Done","Done"
 ]
 ,
-// fltk 7Fl_Tile 20 1354 1142 644 16 0
+// fltk 7Fl_Tile 20 1343 1036 644 16 0
 [
-// fltk N4xcas7EditeurE 20 1354 1142 360 16 0
+// fltk N4xcas7EditeurE 20 1343 1036 360 16 0
 8619 0  ,
 test_simplex():=
 begin
@@ -784,223 +792,232 @@ expected:=[-5/4,[[0,2,1,1,-24,0,6,0,2,1,1],[0,0,1,0,0,1,0,0,0,1,1],[1,-1/2,3/4,0
 result:=simplex([[1,0,0,1/4,-8,-1,9,0],[0,1,0,1/2,-12,-1/2,3,0],[0,0,1,0,0,1,0,1],[0,0,0,-3/4,20,-1/2,6,0]],-3);
 return sum(abs(expected - result)) == 0;
 end:;,
-// fltk N4xcas10Log_OutputE 20 1714 1142 262 16 0
+// fltk N4xcas10Log_OutputE 20 1703 1036 262 16 0
 // Parsing test_simplex// Success// compiling test_simplex// Parsing test01// Success// compiling test01// Parsing test02// Warning: lpmin, declared as global variable(s). If symbolic variables are required, declare them as local and run purge// compiling test02// Parsing test03// Success// compiling test03// Parsing test04// Success// compiling test04// Parsing test05// Success// compiling test05// Parsing test06// Warning: lpmax, declared as global variable(s). If symbolic variables are required, declare them as local and run purge// compiling test06// Parsing test07// Success// compiling test07// Parsing test08// Warning: lpmin, declared as global variable(s). If symbolic variables are required, declare them as local and run purge// compiling test08// Parsing test09// Warning: lpmin, declared as global variable(s). If symbolic variables are required, declare them as local and run purge// compiling test09// Parsing test10// Warning: lpmax, declared as global variable(s). If symbolic variables are required, declare them as local and run purge// compiling test10// Parsing test11// Warning: lpmax, declared as global variable(s). If symbolic variables are required, declare them as local and run purge// compiling test11// Parsing test12// Warning: lpmax, declared as global variable(s). If symbolic variables are required, declare them as local and run purge// compiling test12// Parsing test13// Success// compiling test13// Parsing test14// Warning: lpmin, declared as global variable(s). If symbolic variables are required, declare them as local and run purge// compiling test14// Parsing test15// Warning: lpmax, declared as global variable(s). If symbolic variables are required, declare them as local and run purge// compiling test15// Parsing test16// Success// compiling test16// Parsing test17// Success// compiling test17
 ,
-// fltk N4xcas8EquationE 20 1976 1142 22 16 0 1
+// fltk N4xcas8EquationE 20 1965 1036 22 16 0 1
 "Done","Done","Done","Done","Done","Done","Done","Done","Done","Done","Done","Done","Done","Done","Done","Done","Done","Done"
 ]
 ,
-// fltk 7Fl_Tile 20 2000 1142 245 16 0
+// fltk 7Fl_Tile 20 1989 1036 245 16 0
 [
-// fltk N4xcas16Xcas_Text_EditorE 20 2000 1142 30 16 0
+// fltk N4xcas16Xcas_Text_EditorE 20 1989 1036 30 16 0
 66 0 ,
 simplex([[1,2,0,1,20],[2,1,1,0,10],[-1,4,-2,3,40],[1,4,3,2,0]],-3),
-// fltk N4xcas10Log_OutputE 20 2030 1142 1 16 0
+// fltk N4xcas10Log_OutputE 20 2019 1036 1 16 0
 
 ,
-// fltk N4xcas8EquationE 20 2031 1142 214 16 0 1
+// fltk N4xcas8EquationE 20 2020 1036 214 16 0 1
 [35,[[1,1/2,1/2,0,3/4,0,-1/4,5],[0,0,0,0,-3/2,1,1/2,0],[0,3/2,-1/2,1,1/4,0,1/4,15],[0,1/2,7/2,0,-5/4,0,-1/4,-35]],[1,6,4],3,[[5],[0],[0],[15],[0],[0],[0]]]
 ]
 ,
-// fltk 7Fl_Tile 20 2247 1142 337 16 0
+// fltk 7Fl_Tile 20 2236 1036 337 16 0
 [
-// fltk N4xcas16Xcas_Text_EditorE 20 2247 1142 30 16 0
+// fltk N4xcas16Xcas_Text_EditorE 20 2236 1036 30 16 0
 55 0 ,
 simplex([[2,4,22],[3,2,20],[4,5,40],[6,5,0]],[lpmin,3]),
-// fltk N4xcas10Log_OutputE 20 2277 1142 1 16 0
+// fltk N4xcas10Log_OutputE 20 2266 1036 1 16 0
 
 ,
-// fltk N4xcas8EquationE 20 2278 1142 306 16 0 1
+// fltk N4xcas8EquationE 20 2267 1036 306 16 0 1
 [320/7,[[0,1,0,4/7,-3/7,0,-4/7,3/7,40/7],[1,0,0,-5/7,2/7,0,5/7,-2/7,20/7],[0,0,1,6/7,-8/7,-1,-6/7,8/7,46/7],[0,0,0,10/7,3/7,0,-10/7,-3/7,-320/7]],[2,1,3],3,[[20/7],[40/7],[46/7],[0],[0],[0],[0],[0]]]
 ]
 ,
-// fltk 7Fl_Tile 20 2586 1142 221 16 0
+// fltk 7Fl_Tile 20 2575 1036 221 16 0
 [
-// fltk N4xcas16Xcas_Text_EditorE 20 2586 1142 30 16 0
+// fltk N4xcas16Xcas_Text_EditorE 20 2575 1036 30 16 0
 48 0 ,
 simplex([[3,2,1,10],[2,5,3,15],[-2,-3,-4,0]],-2),
-// fltk N4xcas10Log_OutputE 20 2616 1142 1 16 0
+// fltk N4xcas10Log_OutputE 20 2605 1036 1 16 0
 
 ,
-// fltk N4xcas8EquationE 20 2617 1142 190 16 0 1
+// fltk N4xcas8EquationE 20 2606 1036 190 16 0 1
 [-130/7,[[1,1/7,0,3/7,-1/7,15/7],[0,11/7,1,-2/7,3/7,25/7],[0,25/7,0,-2/7,10/7,130/7]],[1,3],3,[[15/7],[0],[25/7],[0],[0]]]
 ]
 ,
-// fltk 7Fl_Tile 20 2809 1142 401 16 0
+// fltk 7Fl_Tile 20 2798 1036 412 16 0
 [
-// fltk N4xcas16Xcas_Text_EditorE 20 2809 1142 30 16 0
+// fltk N4xcas16Xcas_Text_EditorE 20 2798 1036 41 16 0
 95 0 ,
 simplex([[4,-1,0,1,-1,1,0,6],[-7,8,1,0,0,0,-1,7],[1,1,0,4,-4,0,0,12],[-3,2,1,-1,1,0,0,-87]],-3),
-// fltk N4xcas10Log_OutputE 20 2839 1142 1 16 0
+// fltk N4xcas10Log_OutputE 20 2839 1036 1 16 0
 
 ,
-// fltk N4xcas8EquationE 20 2840 1142 370 16 0 1
+// fltk N4xcas8EquationE 20 2840 1036 370 16 0 1
 [1441/17,[[1,0,1/17,0,0,32/85,-1/17,32/85,1/17,-8/85,131/85],[0,1,3/17,0,0,28/85,-3/17,28/85,3/17,-7/85,189/85],[0,0,-1/17,1,-1,-3/17,1/17,-3/17,-1/17,5/17,35/17],[0,0,13/17,0,0,5/17,4/17,5/17,-4/17,3/17,-1441/17]],[1,2,4],3,[[131/85],[189/85],[0],[35/17],[0],[0],[0],[0],[0],[0]]]
 ]
 ,
-// fltk 7Fl_Tile 20 3212 1142 221 16 0
+// fltk 7Fl_Tile 20 3212 1036 221 16 0
 [
-// fltk N4xcas16Xcas_Text_EditorE 20 3212 1142 30 16 0
+// fltk N4xcas16Xcas_Text_EditorE 20 3212 1036 30 16 0
 49 0 ,
 simplex([[2,3,4,6],[4,2,5,5],[22,20,40,0]],lpmax),
-// fltk N4xcas10Log_OutputE 20 3242 1142 1 16 0
+// fltk N4xcas10Log_OutputE 20 3242 1036 1 16 0
 
 ,
-// fltk N4xcas8EquationE 20 3243 1142 190 16 0 1
+// fltk N4xcas8EquationE 20 3243 1036 190 16 0 1
 [320/7,[[-6/7,1,0,5/7,-4/7,10/7],[8/7,0,1,-2/7,3/7,3/7],[46/7,0,0,20/7,40/7,320/7]],[2,3],2,[[0],[10/7],[3/7],[0],[0]]]
 ]
 ,
-// fltk 7Fl_Tile 20 3435 1142 181 16 0
+// fltk 7Fl_Tile 20 3435 1036 181 16 0
 [
-// fltk N4xcas16Xcas_Text_EditorE 20 3435 1142 30 16 0
+// fltk N4xcas16Xcas_Text_EditorE 20 3435 1036 30 16 0
 45 0 ,
 simplex([[3,-1,1],[1,-1,5],[2,5,0]],-1,[1,2]),
-// fltk N4xcas10Log_OutputE 20 3465 1142 1 16 0
+// fltk N4xcas10Log_OutputE 20 3465 1036 1 16 0
 
 ,
-// fltk N4xcas8EquationE 20 3466 1142 150 16 0 1
+// fltk N4xcas8EquationE 20 3466 1036 150 16 0 1
 [12,[[1,0,0,-1,1,1],[0,0,1,-2,1,6],[0,1,0,-3,2,2],[0,0,0,17,-12,-12]],[1,3,2],2,[[1],[2],[6],[0],[0]]]
 ]
 ,
-// fltk 7Fl_Tile 20 3618 1142 213 16 0
+// fltk 7Fl_Tile 20 3618 1036 213 16 0
 [
-// fltk N4xcas16Xcas_Text_EditorE 20 3618 1142 30 16 0
+// fltk N4xcas16Xcas_Text_EditorE 20 3618 1036 30 16 0
 56 0 ,
 simplex([[1,3,2,7],[2,2,1,11],[-1,-3,-3,0]],lpmin,[1,3]),
-// fltk N4xcas10Log_OutputE 20 3648 1142 1 16 0
+// fltk N4xcas10Log_OutputE 20 3648 1036 1 16 0
 
 ,
-// fltk N4xcas8EquationE 20 3649 1142 182 16 0 1
+// fltk N4xcas8EquationE 20 3649 1036 182 16 0 1
 [-10,[[0,1,1,0,0,1,3],[0,-1,0,-2,1,3,6],[1,1,0,1,0,-2,1],[0,1,0,1,0,1,10]],[3,5,1],3,[[1],[0],[3],[0],[6],[0]]]
 ]
 ,
-// fltk 7Fl_Tile 20 3833 1142 456 16 0
+// fltk 7Fl_Tile 20 3833 1036 456 16 0
 [
-// fltk N4xcas16Xcas_Text_EditorE 20 3833 1142 30 16 0
+// fltk N4xcas16Xcas_Text_EditorE 20 3833 1036 30 16 0
 50 0 ,
 simplex([[7,1,35],[-1,3,6],[-5,-7,0]],lpmin,[1,2]),
-// fltk N4xcas10Log_OutputE 20 3863 1142 1 16 0
+// fltk N4xcas10Log_OutputE 20 3863 1036 1 16 0
 
 ,
-// fltk N4xcas8EquationE 20 3864 1142 425 16 0 1
+// fltk N4xcas8EquationE 20 3864 1036 425 16 0 1
 [-41,[[1,0,0,0,0,0,0,0,0,0,-5/12,1/4,4],[0,1,0,0,0,0,0,0,0,0,1/3,0,3],[0,0,0,0,0,0,1,0,0,0,-1/6,-1/2,1],[0,0,0,0,1,0,0,0,0,0,-1,0,1],[0,0,0,0,0,1,0,0,0,0,-7/12,-1/4,1],[0,0,1,0,0,0,0,0,0,0,31/12,-7/4,4],[0,0,0,0,0,0,0,1,0,0,9/4,-7/4,3],[0,0,0,0,0,0,0,0,1,0,2/3,-1,1],[0,0,0,1,0,0,0,0,0,0,-17/12,1/4,1],[0,0,0,0,0,0,0,0,0,1,5/12,-5/4,1],[0,0,0,0,0,0,0,0,0,0,1/4,5/4,41]],[1,2,7,5,6,3,8,9,4,10],11,[[4],[3],[4],[1],[1],[1],[1],[3],[1],[1],[0],[0]]]
 ]
 ,
-// fltk 7Fl_Tile 20 4291 1142 117 16 0
+// fltk 7Fl_Tile 20 4291 1036 117 16 0
 [
-// fltk N4xcas16Xcas_Text_EditorE 20 4291 1142 30 16 0
+// fltk N4xcas16Xcas_Text_EditorE 20 4291 1036 30 16 0
 38 0 ,
 simplex([[1,1,6],[3,2,0]],lpmax,[1,2]),
-// fltk N4xcas10Log_OutputE 20 4321 1142 1 16 0
+// fltk N4xcas10Log_OutputE 20 4321 1036 1 16 0
 
 ,
-// fltk N4xcas8EquationE 20 4322 1142 86 16 0 1
+// fltk N4xcas8EquationE 20 4322 1036 86 16 0 1
 [18,[[1,1,1,6],[0,1,3,18]],[1],1,[[6],[0],[0]]]
 ]
 ,
-// fltk 7Fl_Tile 20 4410 1142 456 16 0
+// fltk 7Fl_Tile 20 4410 1036 456 16 0
 [
-// fltk N4xcas16Xcas_Text_EditorE 20 4410 1142 30 16 0
+// fltk N4xcas16Xcas_Text_EditorE 20 4410 1036 30 16 0
 51 0 ,
 simplex([[2,9,40],[11,-8,82],[3,13,0]],lpmax,[1,2]),
-// fltk N4xcas10Log_OutputE 20 4440 1142 1 16 0
+// fltk N4xcas10Log_OutputE 20 4440 1036 1 16 0
 
 ,
-// fltk N4xcas8EquationE 20 4441 1142 425 16 0 1
+// fltk N4xcas8EquationE 20 4441 1036 425 16 0 1
 [58,[[0,1,1,0,0,0,0,0,0,0,0,-1,4],[1,0,-4,0,0,0,0,0,0,0,0,9/2,2],[0,0,52,1,0,0,0,0,0,0,0,-115/2,92],[0,0,51,0,1,0,0,0,0,0,0,-113/2,90],[0,0,50,0,0,1,0,0,0,0,0,-111/2,88],[0,0,48,0,0,0,1,0,0,0,0,-107/2,84],[0,0,46,0,0,0,0,1,0,0,0,-103/2,80],[0,0,4,0,0,0,0,0,1,0,0,-9/2,6],[0,0,3,0,0,0,0,0,0,1,0,-7/2,4],[0,0,2,0,0,0,0,0,0,0,1,-5/2,2],[0,0,1,0,0,0,0,0,0,0,0,1/2,58]],[2,1,4,5,6,7,8,9,10,11],10,[[2],[4],[0],[92],[90],[88],[84],[80],[6],[4],[2],[0]]]
 ]
 ,
-// fltk 7Fl_Tile 20 4868 1142 213 16 0
+// fltk 7Fl_Tile 20 4868 1036 213 16 0
 [
-// fltk N4xcas16Xcas_Text_EditorE 20 4868 1142 30 16 0
+// fltk N4xcas16Xcas_Text_EditorE 20 4868 1036 30 16 0
 58 0 ,
 simplex([[1,-1,0,12],[0,2,3,28],[2,-4,1,0]],lpmax,[1,2,3]),
-// fltk N4xcas10Log_OutputE 20 4898 1142 1 16 0
+// fltk N4xcas10Log_OutputE 20 4898 1036 1 16 0
 
 ,
-// fltk N4xcas8EquationE 20 4899 1142 182 16 0 1
+// fltk N4xcas8EquationE 20 4899 1036 182 16 0 1
 [33,[[1,-1,0,1,0,0,12],[0,0,1,0,0,1,9],[0,2,0,0,1,-3,1],[0,2,0,2,0,1,33]],[1,3,5],3,[[12],[0],[9],[0],[1],[0]]]
 ]
 ,
-// fltk 7Fl_Tile 20 5083 1142 245 16 0
+// fltk 7Fl_Tile 20 5083 1036 245 16 0
 [
-// fltk N4xcas16Xcas_Text_EditorE 20 5083 1142 30 16 0
+// fltk N4xcas16Xcas_Text_EditorE 20 5083 1036 30 16 0
 54 0 ,
 simplex([[1,-1,0,12],[0,2,3,28],[2,-4,1,0]],2,[1,2,3]),
-// fltk N4xcas10Log_OutputE 20 5113 1142 1 16 0
+// fltk N4xcas10Log_OutputE 20 5113 1036 1 16 0
 
 ,
-// fltk N4xcas8EquationE 20 5114 1142 214 16 0 1
+// fltk N4xcas8EquationE 20 5114 1036 214 16 0 1
 [28,[[1,0,0,0,-3,1,2,14],[0,0,1,0,2,0,-1,8],[0,1,0,0,-3,0,2,2],[0,0,0,1,-2,0,1,1],[0,0,0,0,8,2,-5,28]],[1,3,2,4],4,[[14],[2],[8],[1],[0],[0],[0]]]
 ]
 ,
-// fltk 7Fl_Tile 20 5330 1142 241 16 0
+// fltk 7Fl_Tile 20 5330 1036 241 16 0
 [
-// fltk N4xcas16Xcas_Text_EditorE 20 5330 1142 30 16 0
+// fltk N4xcas16Xcas_Text_EditorE 20 5330 1036 30 16 0
 60 0 ,
 simplex([-[2,4,22],-[3,2,20],-[4,5,40],[6,5,0]],lpmin,[1,2]),
-// fltk N4xcas10Log_OutputE 20 5360 1142 1 16 0
+// fltk N4xcas10Log_OutputE 20 5360 1036 1 16 0
 
 ,
-// fltk N4xcas8EquationE 20 5361 1142 210 16 0 1
+// fltk N4xcas8EquationE 20 5361 1036 210 16 0 1
 [47,[[0,0,1,2,0,-4,10],[1,0,0,-1,0,1,2],[0,1,0,1,0,-3/2,7],[0,0,0,1,1,-7/2,3],[0,0,0,1,0,3/2,-47]],[3,1,2,5],3,[[2],[7],[10],[0],[3],[0]]]
 ]
 ,
-// fltk 7Fl_Tile 20 5573 1142 475 16 0
+// fltk 7Fl_Tile 20 5573 1036 475 16 0
 [
-// fltk N4xcas16Xcas_Text_EditorE 20 5573 1142 41 16 0
+// fltk N4xcas16Xcas_Text_EditorE 20 5573 1036 41 16 0
 172 0 ,
 simplex([[5,11,13,16,9,32],[7,19,20,23,15,62],[9,25,26,29,16,77],[9,28,30,35,15,88],[-1,1,0,0,0,0],[0,0,0,1,1,1],[0,0,-1,-1,-1,-1],[10,18,22,25,12,0]],lpmax,[],[1,2,3,4,5]),
-// fltk N4xcas10Log_OutputE 20 5614 1142 1 16 0
+// fltk N4xcas10Log_OutputE 20 5614 1036 1 16 0
 
 ,
-// fltk N4xcas8EquationE 20 5615 1142 433 16 0 1
+// fltk N4xcas8EquationE 20 5615 1036 433 16 0 1
 [53,[[1,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,1],[0,0,0,0,0,0,1,0,0,0,0,0,-37/8,13/8,-3/4,0,0,-15/8,41/8,49/4],[0,0,0,0,0,0,0,1,0,0,0,0,-2,-3,-1,0,0,-2,1,13],[0,0,0,0,0,0,0,0,1,0,0,0,43/8,-59/8,5/4,0,0,-15/8,-55/8,69/4],[0,0,0,0,0,1,0,0,0,0,0,0,-11/8,11/8,3/4,0,0,-9/8,7/8,3/4],[0,0,0,1,0,0,0,0,0,0,0,0,-1,0,-1,0,0,0,1,0],[0,0,0,0,0,0,0,0,0,0,0,1,3/8,-11/8,1/4,0,0,1/8,-7/8,1/4],[0,0,0,0,0,0,0,0,0,0,1,0,-3/8,11/8,3/4,0,0,-1/8,7/8,3/4],[0,0,0,0,1,0,0,0,0,0,0,0,11/8,-11/8,1/4,0,0,1/8,-15/8,1/4],[0,0,1,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,1],[0,0,0,0,0,0,0,0,0,0,0,0,1,0,1,1,0,0,-1,1],[0,0,0,0,0,0,0,0,0,0,0,0,-11/8,11/8,-1/4,0,1,-1/8,15/8,3/4],[0,0,0,0,0,0,0,0,0,1,0,0,1,-1,0,0,0,0,0,0],[0,1,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,1],[0,0,0,0,0,0,0,0,0,0,0,0,3/2,3/2,0,0,0,3/2,5/2,53]],[1,7,8,9,6,4,12,11,5,3,16,17,10,2],10,[[1],[1],[0],[1],[0],[0],[13],[14],[16],[0],[0],[0],[0],[0],[1],[0],[1],[0],[0]]]
 ]
 ,
-// fltk 7Fl_Tile 20 6050 1142 177 16 0
+// fltk 7Fl_Tile 20 6050 1036 177 16 0
 [
-// fltk N4xcas16Xcas_Text_EditorE 20 6050 1142 30 16 0
+// fltk N4xcas16Xcas_Text_EditorE 20 6050 1036 30 16 0
 39 0 ,
 solveGame([[0,1,-2],[-1,0,1],[2,-1,0]]),
-// fltk N4xcas10Log_OutputE 20 6080 1142 1 16 0
+// fltk N4xcas10Log_OutputE 20 6080 1036 1 16 0
 
 ,
-// fltk N4xcas8EquationE 20 6081 1142 146 16 0 1
+// fltk N4xcas8EquationE 20 6081 1036 146 16 0 1
 [0,[[1/4],[1/2],[1/4]],[[1/4],[1/2],[1/4]]]
 ]
 ,
-// fltk 7Fl_Tile 20 6229 1142 361 16 0
+// fltk 7Fl_Tile 20 6229 1036 372 16 0
 [
-// fltk N4xcas16Xcas_Text_EditorE 20 6229 1142 30 16 0
+// fltk N4xcas16Xcas_Text_EditorE 20 6229 1036 41 16 0
 103 0 ,
 simplex([[1,0,0,1/4,-8,-1,9,0],[0,1,0,1/2,-12,-1/2,3,0],[0,0,1,0,0,1,0,1],[0,0,0,-3/4,20,-1/2,6,0]],-3),
-// fltk N4xcas10Log_OutputE 20 6259 1142 1 16 0
+// fltk N4xcas10Log_OutputE 20 6270 1036 1 16 0
 
 ,
-// fltk N4xcas8EquationE 20 6260 1142 330 16 0 1
+// fltk N4xcas8EquationE 20 6271 1036 330 16 0 1
 [-5/4,[[0,2,1,1,-24,0,6,0,2,1,1],[0,0,1,0,0,1,0,0,0,1,1],[1,-1/2,3/4,0,-2,0,15/2,1,-1/2,3/4,3/4],[0,3/2,5/4,0,2,0,21/2,0,3/2,5/4,5/4]],[4,6,1],13,[[3/4],[0],[0],[1],[0],[1],[0],[0],[0],[0]]]
 ]
 ,
-// fltk 7Fl_Tile 20 6592 1142 53 16 0
+// fltk 7Fl_Tile 20 6603 1036 53 16 0
 [
-// fltk N4xcas16Xcas_Text_EditorE 20 6592 1142 30 16 0
+// fltk N4xcas16Xcas_Text_EditorE 20 6603 1036 30 16 0
 14 0 ,
 test_simplex(),
-// fltk N4xcas10Log_OutputE 20 6622 1142 1 16 0
+// fltk N4xcas10Log_OutputE 20 6633 1036 1 16 0
 
 ,
-// fltk N4xcas8EquationE 20 6623 1142 22 16 0 1
+// fltk N4xcas8EquationE 20 6634 1036 22 16 0 1
 [true,true,true,true,true,true,true,true,true,true,true,true,true,true,true,true,true]
 ]
 ,
-// fltk 7Fl_Tile 20 6647 1142 31 16 0
+// fltk 7Fl_Tile 20 6658 1036 31 16 0
 [
-// fltk N4xcas16Xcas_Text_EditorE 20 6647 1142 30 16 0
+// fltk N4xcas16Xcas_Text_EditorE 20 6658 1036 30 16 0
 0 0 ,
 ,
-// fltk N4xcas10Log_OutputE 20 6677 1142 1 16 0
+// fltk N4xcas10Log_OutputE 20 6688 1036 1 16 0
+
+]
+,
+// fltk 7Fl_Tile 20 6691 1036 31 16 0
+[
+// fltk N4xcas16Xcas_Text_EditorE 20 6691 1036 30 16 0
+0 0 ,
+,
+// fltk N4xcas10Log_OutputE 20 6721 1036 1 16 0
 
 ]
 // context 59620 giac archive

@@ -1,11 +1,10 @@
 // Author: @ftneek
 // Thanks: @Albert Chan for their contributions
-// Last revised: 2024/11/30
+// Last revised: 2024/12/6
 // Reference: An Introduction to Linear Programming and Game Theory 3rd Edition, Paul R. Thie and Gerard E. Keough (ISBN: 978-0470232866)
 
 // TODO: symbolic input
 // TODO: omit arguments from simplex() if they are not needed
-// TODO: create pdf documentation
 // TODO: improve efficiency of unrestricted variables: (how does this interact with integer restrictions?)
 // TODO: Sensitivity Analysis: changes in b, changes in c, add a constraint, add a variable, (changes in A?)
 // TODO: Branch and (Bound/Cut) (lpsolve(x1+x2,[1867*x1+1913*x2=3618894],assume=nonnegint,lp_verbose=true) returns NO_SOLUTIONS() on simplex_int())
@@ -25,7 +24,6 @@
 // [dir] is a list of 2 items; dir[1] is the number of "=" constraints and dir[2] is the number of ">=" constraints.
 // a positive value for dir[1] indicates maximization, a negative value indicates minimization. for no "=" and max use inf, for min use -inf
 // optionally, provide only dir[1] (not a list) for no ">="
-// or provide only dir[2] (a list) for no "=" / NOT IMPLIMENTED YET
 // 'integers' is a list of indices of variables with integer restriction.
 // 'binary' is a list of indices of variables with binary restriction.
 // 'unrestricted' is a list of indices of variables without nonnegative restriction.
@@ -47,18 +45,18 @@ NO_SOLUTIONS():=contains(version(),"HP Prime") ? STRINGFROMID("AppQuadE_LinearSo
 
 simplex(a):=
 begin
-local (art:=0),(dir:=-inf),(binary:=[]),(integers:=[]),(unrestricted:=[]);
+local (art:=0),(dir:=-inf),(integers:=[]),(binary:=[]),(unrestricted:=[]);
 local b,c,d,v,bv,n,I,J,(ge:=0),(l:=-not(istart()));
 
 if dim(d:=dim(a))!=2 then
- if d>5 then error(a) end;
+ if d > 5 then error(a) end;
  a,dir,integers,binary,unrestricted := a;
  if type(dir)==DOM_LIST then
-  if dim(dir)!=2 then error(dir,'size!=2') end;
+  if dim(dir) != 2 then error(dir,'size != 2') end;
   art,ge:=dir;
   dir:=art;
  end;
- if (art:=abs(dir))==inf then art:=0 end;
+ if (art:=abs(dir)) == inf then art:=0 end;
  d:=dim(a);
 end;
 
@@ -293,16 +291,15 @@ end:;
 // Basis is the basis and n is the total number of variables
 basis_to_id(Basis,n):=
 begin
-local (ID:=0),(l:=len(Basis)),(l1:=-not(istart())),(I:=0);
-for I from 1 to l do ID+= comb(Basis[I+l1]-1,I) end;
-return ID;
+local (m:=len(Basis)),(l:=-not(istart())),(I:=0);
+return sum(comb(Basis[I+l]-1,I),I,1,m);
 end:;
 
 // Returns the basis mapped to the provided id, given n variables and b variables in the basis
-id_to_basis(ID, n, b):=
+id_to_basis(ID, n, m):=
 begin
 local (Basis:=[]),(x:=ID),(start:=-1),(v:=2*(1-contains(version(),"giac"))),(I:=0),(J:=0);
-for J in range(b,v,-1) do
+for J in range(m,v,-1) do
  for I in range(1,n+1) do if comb(I-1,J) <= x then start:=I else break end end;
  Basis:=append(Basis,start);
  x-=comb(start-1,J);
