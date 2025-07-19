@@ -1,4 +1,4 @@
-read("src/txt/simplex.txt"):;
-read("src/txt/GameTheory.txt"):;
-read("src/txt/tests.txt"):;
+read("src/txt/simplex.txt");
+read("src/txt/GameTheory.txt");
+read("src/txt/tests.txt");
 test_simplex();
