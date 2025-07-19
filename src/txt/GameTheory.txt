@@ -5,7 +5,6 @@
 //TODO: look to optimize dominance()
 //TODO: 2-person non-zero sum games
 
-#cas
 // accepts payoff matrix p for a 2-person zero sum game
 // returns [v,x,y]
 // v is value of the game
@@ -253,4 +252,3 @@ if v[2+l] then v[2+l]:=min(n) else v[2+l]:=[] end;
 
 return [v[1+l],v[2+l]];
 end:;
-#end
