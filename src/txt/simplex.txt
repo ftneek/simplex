@@ -38,7 +38,6 @@
 // simplex_int(a,bv,v,art,ign,P,integers) is an implementation of Gomory's Plane Cutting Algorithm and can be used for pure or mixed integer problems.
 // arguments are from simplex() and simplex_core().
 
-#cas
 lpmax:=inf;
 lpmin:=-inf;
 NO_SOLUTIONS():=contains(version(),"HP Prime") ? STRINGFROMID("AppQuadE_LinearSolverNoSolution") : "No solutions":;
@@ -318,4 +317,3 @@ begin
  for J in range(c-art,c) do if d:=(contains(col(a,J+l),1)) then lrow+=a[d+l] end end;
  append(a,artrow(c,art)-lrow);
 end:;
-#end
