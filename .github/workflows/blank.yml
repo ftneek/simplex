@@ -36,7 +36,6 @@ jobs:
           echo $result
           result=[true,false,true]
           echo $result
-          echo ($result == *false*)
           if [[ "$result" == *false* ]]; then
             exit 1
           fi
