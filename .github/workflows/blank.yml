@@ -34,6 +34,9 @@ jobs:
         run: |
           result=$(icas master 2>/dev/null | tail -n1)
           echo $result
-          if [[ "$bools" == *false* ]]; then
+          result=$([true,false,true])
+          echo $result
+          echo ($result == *false*)
+          if [[ "$result" == *false* ]]; then
             exit 1
           fi
