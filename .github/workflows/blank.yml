@@ -1,0 +1,31 @@
+name: CI
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: install xcas
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y xcas
+
+      - name: run master
+        run: |
+          result=$(icas master 2>/dev/null | tail -n1)
+          if [[ "$result" == *false* ]]; then
+            echo $result
+            exit 1
+          else
+            echo "pass"
+          fi
