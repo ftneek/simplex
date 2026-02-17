@@ -147,7 +147,11 @@ while cmin<0 or bmin<0 do
  for I from 1 to (d[2+l]-1-ign) do if c[I+l] < 0 and max(col(a,I+l))<=0 then return [-inf,a,bv,P,[]] end end;
 
 // Step 4: Determine bv to enter and exit
- if bland then for I from 1 to (d[2+l]-1-ign) do if c[I+l] < 0 and not(contains(bv,I)) then J:=I end end;
+ if bland then
+  J:=0;
+  for I from 1 to (d[2+l]-1-ign) do
+   if c[I+l] < 0 and not(contains(bv,I)) then J:=I; break end;
+  end;
  else J:=contains(c,cmin) end; // xin
  I:=minRatio(col(a,J+l),col(a,0+l),n); // xout
 
