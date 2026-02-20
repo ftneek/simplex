@@ -68,7 +68,7 @@ if c:=len(unrestricted) then
   a:=addcol1(a,-b,unrestricted[I+l]+1+l);
   if n:=contains(integers,unrestricted[I+l]) then
    integers:=append(integers,0);
-   for J from len(integers) downto n+1 do integers[J+l]:=integers[J-1+l]+1+l end;
+   for J from len(integers) downto n+1 do integers[J+l]:=integers[J-1+l]+1 end;
   end;
  end;
 d[2+l]+=c;
