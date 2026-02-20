@@ -59,12 +59,15 @@ if dim(d:=dim(a))!=2 then
  d:=dim(a);
 end;
 
+if unrestricted != [] then unrestricted:=sort(unrestricted) end;
+if integers != [] then integers:=sort(integers) end;
+
 if c:=len(unrestricted) then
  for I from c downto 1 do
   b:=col(a,unrestricted[I+l]+l);
   a:=addcol1(a,-b,unrestricted[I+l]+1+l);
   if n:=contains(integers,unrestricted[I+l]) then
-   integers:=extend(integers,0);
+   integers:=append(integers,0);
    for J from len(integers) downto n+1 do integers[J+l]:=integers[J-1+l]+1+l end;
   end;
  end;
@@ -121,9 +124,12 @@ if dir>0 then a[0+l]:=-a[0+l] end;
 a:=addartrow(a,art);
 if integers == [] then c:=simplex_core(a,bv,art,0,0) else c:=simplex_int(a,bv,art,0,0,integers) end;
 if dir>0 and c[1+l]!=NO_SOLUTIONS() then c[1+l]:=-c[1+l] end;
-//if unrestricted != [] then for I from 1 to len(unrestricted) do c[0][unrestricted[I]]-=c[0][unrestricted[I]+1] end end;
-//if unrestricted != [] then for I from len(unrestricted) downto 1 do c[0]:=delrows(c[0],I+1) end end;
-//return [c[1],c[0]];
+if unrestricted != [] and len(c[0+l]) then
+ for I from 1 to len(unrestricted) do
+  c[0+l][unrestricted[I+l]+l]-=c[0+l][unrestricted[I+l]+1+l];
+  c[0+l]:=delrows(c[0+l],unrestricted[I+l]+1+l);
+ end;
+end;
 return c;
 end:;
 

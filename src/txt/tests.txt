@@ -200,7 +200,24 @@ result:=simplex([[1,0,0,-1,4],[-1,0,0,1,3],[0,1,0,-1,5],[0,-1,0,1,2],[0,0,1,0,6]
 return sum(abs(expected - result)) == 0;
 end:;
 
+// unrestricted + integer variable should preserve correct split/recombine indices
+test19():=
+begin
+local expected,result;
+expected:=[2,[[0,0,1,1,5],[-1,1,0,1,2],[0,0,0,1,2]],[3,2],1,[[-2],[5],[0]]];
+result:=simplex([[[1,3],[-1,2],[-1,0]],lpmax,[1],[],[1]]);
+return sum(abs(expected - result)) == 0;
+end:;
+
+// index order does not matter ([2,1] == [1,2])
+test20():=
+begin
+local result,(l:=-not(istart()));
+result:=simplex([[1,2,5],[3,1,6],[4,1,0]],lpmax,[2,1],[],[2,1]);
+return result[1+l]==+inf;
+end:;
+
 test_simplex():=
 begin
-return [test01(),test02(),test03(),test04(),test05(),test06(),test07(),test08(),test09(),test10(),test11(),test12(),test13(),test14(),test15(),test16(),test17(),test18()];
+return [test01(),test02(),test03(),test04(),test05(),test06(),test07(),test08(),test09(),test10(),test11(),test12(),test13(),test14(),test15(),test16(),test17(),test18(),test19(),test20()];
 end:;
