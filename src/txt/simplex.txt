@@ -14,7 +14,7 @@
 // TODO: Generate random problems
 // TODO: read problems from a file
 
-// simplex(a,[dir],[integers],[binary],[unrestricted]) accepts 1-5 arguments
+// simplex(a,[dir],[integers],[binary],[unrestricted],[shared]) accepts 1-6 arguments
 // 'a' is a linear program as an augmented matrix [ A| b
 //                                                 --+--
 //                                                  c|-z0]
@@ -27,6 +27,7 @@
 // 'integers' is a list of indices of variables with integer restriction.
 // 'binary' is a list of indices of variables with binary restriction.
 // 'unrestricted' is a list of indices of variables without nonnegative restriction.
+// 'shared' toggles unrestricted handling method: 1=shared column, 0=split variables.
 
 // simplex_core(a,bv,art,ign,P) is an implementation of the Simplex Algorithm
 // a is a linear program in canonical form
@@ -45,11 +46,11 @@ NO_SOLUTIONS():=contains(version(),"HP Prime") ? STRINGFROMID("AppQuadE_LinearSo
 simplex(a):=
 begin
 local (art:=0),(dir:=-inf),(integers:=[]),(binary:=[]),(unrestricted:=[]);
-local b,c,d,v,bv,n,I,J,(ge:=0),(l:=-not(istart()));
+local b,c,d,v,bv,n,I,J,(ge:=0),(tindex:=0),(shared:=1),(l:=-not(istart()));
 
 if dim(d:=dim(a))!=2 then
- if d > 5 then error(a) end;
- a,dir,integers,binary,unrestricted := a;
+ if d > 6 then error(a) end;
+ a,dir,integers,binary,unrestricted,shared := a;
  if type(dir)==DOM_LIST then
   if dim(dir) != 2 then error(dir,'size != 2') end;
   art,ge:=dir;
@@ -63,15 +64,28 @@ if unrestricted != [] then unrestricted:=sort(unrestricted) end;
 if integers != [] then integers:=sort(integers) end;
 
 if c:=len(unrestricted) then
- for I from c downto 1 do
-  b:=col(a,unrestricted[I+l]+l);
-  a:=addcol1(a,-b,unrestricted[I+l]+1+l);
-  if n:=contains(integers,unrestricted[I+l]) then
-   integers:=append(integers,0);
-   for J from len(integers) downto n+1 do integers[J+l]:=integers[J-1+l]+1 end;
+ if shared then
+  b:=makelist(d[1+l]);
+  for I from 1 to c do
+   for J from 1 to d[1+l] do b[J+l]+=a[J+l,unrestricted[I+l]+l] end;
   end;
+  a:=addcol1(a,-b,d[2+l]+l);
+  tindex:=d[2+l];
+  d[2+l]+=1;
+  for I from 1 to c do
+   if contains(integers,unrestricted[I+l]) then integers:=sort(integers union [tindex]); break; end;
+  end;
+ else
+  for I from c downto 1 do
+   b:=col(a,unrestricted[I+l]+l);
+   a:=addcol1(a,-b,unrestricted[I+l]+1+l);
+   if n:=contains(integers,unrestricted[I+l]) then
+    integers:=append(integers,0);
+    for J from len(integers) downto n+1 do integers[J+l]:=integers[J-1+l]+1 end;
+   end;
+  end;
+  d[2+l]+=c;
  end;
-d[2+l]+=c;
 end;
 
 c:=row(a,d[1+l]+l);
@@ -125,9 +139,15 @@ a:=addartrow(a,art);
 if integers == [] then c:=simplex_core(a,bv,art,0,0) else c:=simplex_int(a,bv,art,0,0,integers) end;
 if dir>0 and c[1+l]!=NO_SOLUTIONS() then c[1+l]:=-c[1+l] end;
 if unrestricted != [] and len(c[0+l]) then
- for I from 1 to len(unrestricted) do
-  c[0+l][unrestricted[I+l]+l]-=c[0+l][unrestricted[I+l]+1+l];
-  c[0+l]:=delrows(c[0+l],unrestricted[I+l]+1+l);
+ if shared then
+  b:=c[0+l][tindex+l];
+  for I from 1 to len(unrestricted) do c[0+l][unrestricted[I+l]+l]-=b end;
+  c[0+l]:=delrows(c[0+l],tindex+l);
+ else
+  for I from 1 to len(unrestricted) do
+   c[0+l][unrestricted[I+l]+l]-=c[0+l][unrestricted[I+l]+1+l];
+   c[0+l]:=delrows(c[0+l],unrestricted[I+l]+1+l);
+  end;
  end;
 end;
 return c;
