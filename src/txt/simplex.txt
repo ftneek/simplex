@@ -203,6 +203,7 @@ for J from 1 to len(c) do
  if c[J+l] or contains(bv,J) then continue end
  if (b:=abs(transpose(col(a2,J+l))))==1 or b==0 then continue end
  I:=minRatio(col(a2,J+l),col(a2,0+l),1);
+ if I==0 then continue end; // no eligible leaving row (optimal ray candidate)
  a2:=pivot1(a2,I+l,J+l); P+=1;
  l2:=sol(a2);
  if l1==l2 then break end;
