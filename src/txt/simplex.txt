@@ -1,43 +1,55 @@
-// Author: @ftneek
-// Thanks: @Albert Chan for their contributions
-// Last revised: 2024/12/6
-// Reference: An Introduction to Linear Programming and Game Theory 3rd Edition, Paul R. Thie and Gerard E. Keough (ISBN: 978-0470232866)
+/*
+Author: @ftneek
+Thanks: @Albert Chan for their contributions
+Last revised: 2026/2/21
+Reference: An Introduction to Linear Programming and Game Theory 3rd Edition, Paul R. Thie and Gerard E. Keough (ISBN: 978-0470232866)
 
-// TODO: symbolic input
-// TODO: omit arguments from simplex() if they are not needed
-// TODO: improve efficiency of unrestricted variables: (how does this interact with integer restrictions?)
-// TODO: Sensitivity Analysis: changes in b, changes in c, add a constraint, add a variable, (changes in A?)
-// TODO: Branch and (Bound/Cut) (lpsolve(x1+x2,[1867*x1+1913*x2=3618894],assume=nonnegint,lp_verbose=true) returns NO_SOLUTIONS() on simplex_int())
-// TODO: alternative constraints
-// TODO: non {0,1} binary variables xi={x or y} for some x,y
-// TODO: Apply Bland's rule on degenerate pivots only? "The anti-cycling rule need only be applied on degenerate pivots, since cycling can only occur in the presence of degeneracy."
-// TODO: Generate random problems
-// TODO: read problems from a file
+TODO: symbolic input
+TODO: omit arguments from simplex() if they are not needed
+TODO: Sensitivity Analysis: changes in b, changes in c, add a constraint, add a variable, (changes in A?)
+TODO: Branch and (Bound/Cut)
+TODO: alternative constraints
+TODO: non {0,1} binary variables xi={x or y} for some x,y
+TODO: Apply Bland's rule on degenerate pivots only? "The anti-cycling rule need only be applied on degenerate pivots, since cycling can only occur in the presence of degeneracy."
+TODO: Generate random problems
+TODO: read problems from a file
 
-// simplex(a,[dir],[integers],[binary],[unrestricted],[shared]) accepts 1-6 arguments
-// 'a' is a linear program as an augmented matrix [ A| b
-//                                                 --+--
-//                                                  c|-z0]
-// If there are any "=" constraints, they should be the first rows of the linear program.
-// If there are any ">=" constraints, they should be the last rows of the linear program.
-// The objective function should be the final row of the linear program, with the constant negated in the last index.
-// [dir] is a list of 2 items; dir[1] is the number of "=" constraints and dir[2] is the number of ">=" constraints.
-// a positive value for dir[1] indicates maximization, a negative value indicates minimization. for no "=" and max use inf, for min use -inf
-// optionally, provide only dir[1] (not a list) for no ">="
-// 'integers' is a list of indices of variables with integer restriction.
-// 'binary' is a list of indices of variables with binary restriction.
-// 'unrestricted' is a list of indices of variables without nonnegative restriction.
-// 'shared' toggles unrestricted handling method: 1=shared column, 0=split variables.
+simplex(a,[dir],[integers],[binary],[unrestricted],[shared])
+A linear program solver.
+a: Linear program as augmented matrix [[A|b],[c|-z0]].
+   - Constraint rows are grouped/ordered: '=', '<=', '>=', objective row.
+   - The constant term (z0) of the objective function (z0 + sum(c_i*x_i)) is negated and the last entry of the objective row.
+dir: List of the number of "=" and ">=" constraints.
+   - dir[1] >= 0 indicates maximization, dir[1] < 0 indicates minimization. For no "=", +inf/-inf indicates max/min.
+   - optionally, provide only dir[1] (a scalar) for no ">=".
+integers: List of variable indices* with integer restriction.
+binary: List of variable indices* with binary restriction.
+unrestricted: List of variable indices* without nonnegative restriction.
+shared: Unrestricted-variable handling method; 1 = shared column, 0 = split variables.
+Returns: Same signature as `simplex_core` (for now).
+* Variable indices are 1-based, regardless of whether 0-based indexing is enabled.
 
-// simplex_core(a,bv,art,ign,P) is an implementation of the Simplex Algorithm
-// a is a linear program in canonical form
-// bv is a list of basic variable indices
-// art is the number of unused artificial variables
-// ign is the number of used artificial variables (nonzero when you add a constraint to a final tableau that had artificial variables, then ign+=art and art:=numNewConstraints)
-// P is the number of pivot1 operations (0 for initial tableaus, else P>0)
+simplex_core(a,bv,art,ign,P)
+An implementation of the Simplex Algorithm.
+a: Linear program in canonical form (assumes minimization).
+bv: List of basic variable indices.
+art: Count of unused artificial variables.
+ign: Count of used artificial variables.
+P: Count of pivot1 operations.
+Returns: [z,m,bv,P,X]
+    z: Optimum objective value.
+        - z=-inf for unbounded, type(z)==DOM_STRING for no solutions (empty feasible region / infeasible model).
+    m: Final tableau.
+    bv: List of basic variable indices.
+    P: Count of pivot1 operations.
+    X: Matrix of optimal vertices (one per column).
+        - len(X[1])>1 for alternate optimum.
 
-// simplex_int(a,bv,v,art,ign,P,integers) is an implementation of Gomory's Plane Cutting Algorithm and can be used for pure or mixed integer problems.
-// arguments are from simplex() and simplex_core().
+simplex_int(a,bv,v,art,ign,P,integers)
+An implementation of Gomory's cutting-plane algorithm.
+Same arguments as `simplex_core` (except for integers, for which see `simplex`).
+Returns same signature as `simplex_core`.
+*/
 
 lpmax:=inf;
 lpmin:=-inf;
@@ -45,8 +57,8 @@ NO_SOLUTIONS():=contains(version(),"HP Prime") ? STRINGFROMID("AppQuadE_LinearSo
 
 simplex(a):=
 begin
-local (art:=0),(dir:=-inf),(integers:=[]),(binary:=[]),(unrestricted:=[]);
-local b,c,d,v,bv,n,I,J,(ge:=0),(tindex:=0),(shared:=1),(l:=-not(istart()));
+local (art:=0),(dir:=-inf),(integers:=[]),(binary:=[]),(unrestricted:=[]),(shared:=1);
+local b,c,d,v,bv,n,I,J,(ge:=0),(tindex:=0),(l:=-not(istart()));
 
 if dim(d:=dim(a))!=2 then
  if d > 6 then error(a) end;
@@ -153,11 +165,6 @@ end;
 return c;
 end:;
 
-// Returns list [z,m,bv,P,X]
-// z is the minimum, m is the final tableau, bv is a list of basic variables, P is the number of pivot1 operations, X are the optimal inputs
-// if problem was max, then max=-z
-// z∈ℚ,ℝ,ℤ for minimum, z=-inf for unbounded, and type(z)==DOM_STRING for empty feasible region / infeasible model
-// a column of X is a solution, X is empty for unbounded z or empty feasible region. len(X[1])>1 for alternate/infinite solutions
 simplex_core(a,bv,art,ign,P):=
 begin
 local (a2:=[]),b,c,(d:=dim(a)),bmin,cmin,(n:=1+(art>0)),(l1:=[]),(l2:=[]),(I:=0),(J:=0),(bvIDS:=[basis_to_id(bv,dim(a)[[2]]-1)]),(bland:=false),(l:=-not(istart()));
