@@ -19,9 +19,9 @@ A linear program solver.
 a: Linear program as augmented matrix [[A|b],[c|-z0]].
    - Constraint rows are grouped/ordered: '=', '<=', '>=', objective row.
    - The constant term (z0) of the objective function (z0 + sum(c_i*x_i)) is negated and the last entry of the objective row.
-dir: List of the number of "=" and ">=" constraints.
-   - dir[1] >= 0 indicates maximization, dir[1] < 0 indicates minimization. For no "=", +inf/-inf indicates max/min.
-   - optionally, provide only dir[1] (a scalar) for no ">=".
+dir: List of the number of '=' and '>=' constraints.
+   - dir[1] >= 0 indicates maximization, dir[1] < 0 indicates minimization. For no '=', ±inf indicates max/min.
+   - optionally, provide only dir[1] (a scalar) for no '>='.
 integers: List of variable indices* with integer restriction.
 binary: List of variable indices* with binary restriction.
 unrestricted: List of variable indices* without nonnegative restriction.
@@ -48,7 +48,19 @@ Returns: [z,m,bv,P,X]
 simplex_int(a,bv,v,art,ign,P,integers)
 An implementation of Gomory's cutting-plane algorithm.
 Same arguments as `simplex_core` (except for integers, for which see `simplex`).
-Returns same signature as `simplex_core`.
+Returns: Same signature as `simplex_core`.
+
+basis_to_id(Basis,n)
+Maps a basis to an ID.
+Basis: List of basic variables indices.
+n: Total count of variables.
+Returns: An integer representing the provided basis.
+
+id_to_basis(ID, n, m)
+ID: Integer, representing a basis.
+n: Total count of variables.
+m: Count of variables in the target basis.
+Returns: List of basic variables indices.
 */
 
 lpmax:=inf;
@@ -324,17 +336,15 @@ simplex_int(a,bv,art,ign,P,integers):=
 return a;
 end:;
 
-// Maps a basis to an id
-// Basis is the basis and n is the total number of variables
 basis_to_id(Basis,n):=
 begin
 local (m:=len(Basis)),(l:=-not(istart())),(I:=0);
 return sum(comb(Basis[I+l]-1,I),I,1,m);
 end:;
 
-// Returns the basis mapped to the provided id, given n variables and b variables in the basis
 id_to_basis(ID, n, m):=
 begin
+// using version() hack because of for loop + range bug on HP Prime. Look for alternative or wait for bug fix.
 local (Basis:=[]),(x:=ID),(start:=-1),(v:=2*(1-contains(version(),"giac"))),(I:=0),(J:=0);
 for J in range(m,v,-1) do
  for I in range(1,n+1) do if comb(I-1,J) <= x then start:=I else break end end;
@@ -344,7 +354,7 @@ end;
 return reverse(Basis);
 end:;
 
-istart():=begin [1,0][1]==1 end:;
+istart():=[1,0][1]==1:;
 addcol1(m,c,ind):=transpose(insert(transpose(m),ind,c)):;
 pivot1(m,j,k) := pivot((m[j]:=m[j]/m[j][k]),j,k):;
 artrow(column,art):=append(makelist(k->k>column-art,2,column),0):;
